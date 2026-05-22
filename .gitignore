@@ -1,0 +1,53 @@
+# ---- .NET ----
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.dll
+*.exe
+*.pdb
+project.lock.json
+artifacts/
+
+.claude/
+
+# ---- Visual Studio / Rider ----
+.vs/
+.vscode/
+.idea/
+*.userprefs
+
+# ---- Azure Functions (SECRETS — never commit) ----
+local.settings.json
+appsettings.*.json
+!appsettings.json
+azurite/
+__azurite_db*__.json
+__blobstorage__/
+__queuestorage__/
+
+# ---- Secrets / env ----
+*.env
+.env
+.env.*
+secrets.json
+
+# ---- Node / React (client) ----
+node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-error.log*
+*.local
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Logs ----
+*.log
