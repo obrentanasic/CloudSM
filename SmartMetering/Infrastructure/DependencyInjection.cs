@@ -27,6 +27,8 @@ public static class DependencyInjection
                     errorNumbersToAdd: null)));
 
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IPropertyRepository, PropertyRepository>();
+        services.AddScoped<ISmartMeterRepository, SmartMeterRepository>();
 
         services.AddSingleton(jwtOptions);
         services.AddSingleton(sendGridOptions);

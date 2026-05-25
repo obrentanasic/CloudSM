@@ -70,11 +70,14 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-var adminSeed = config.GetSection(AdminSeedOptions.SectionName).Get<AdminSeedOptions>() ?? new AdminSeedOptions();
+var adminSeed = config.GetSection("AdminSeed").Get<UserSeedOptions>() ?? new UserSeedOptions();
 await DatabaseSeeder.SeedAdminAsync(app.Services, adminSeed);
 
 if (app.Environment.IsDevelopment())
 {
+    var consumerSeed = config.GetSection("ConsumerSeed").Get<UserSeedOptions>() ?? new UserSeedOptions();
+    await DatabaseSeeder.SeedConsumerAsync(app.Services, consumerSeed);
+
     app.UseSwagger();
     app.UseSwaggerUI();
 }

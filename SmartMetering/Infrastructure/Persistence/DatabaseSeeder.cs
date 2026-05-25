@@ -8,8 +8,14 @@ namespace SmartMetering.Infrastructure.Persistence;
 
 public static class DatabaseSeeder
 {
-    /// <summary>Creates an initial active Admin from config if none with that email exists. Idempotent.</summary>
-    public static async Task SeedAdminAsync(IServiceProvider services, AdminSeedOptions options, CancellationToken ct = default)
+    public static Task SeedAdminAsync(IServiceProvider services, UserSeedOptions options, CancellationToken ct = default) =>
+        SeedUserAsync(services, options, UserRole.Admin, ct);
+
+    /// <summary>Dev-only convenience: a ready-to-login Consumer so the consumer endpoints can be tested without the email flow.</summary>
+    public static Task SeedConsumerAsync(IServiceProvider services, UserSeedOptions options, CancellationToken ct = default) =>
+        SeedUserAsync(services, options, UserRole.Consumer, ct);
+
+    private static async Task SeedUserAsync(IServiceProvider services, UserSeedOptions options, UserRole role, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(options.Email) || string.IsNullOrWhiteSpace(options.Password))
         {
@@ -29,12 +35,12 @@ public static class DatabaseSeeder
             return;
         }
 
-        var admin = User.Create(options.FirstName, options.LastName, email, options.PhoneNumber, UserRole.Admin);
-        admin.SetPassword(hasher.Hash(options.Password));
+        var user = User.Create(options.FirstName, options.LastName, email, options.PhoneNumber, role);
+        user.SetPassword(hasher.Hash(options.Password));
 
-        await db.Users.AddAsync(admin, ct);
+        await db.Users.AddAsync(user, ct);
         await db.SaveChangesAsync(ct);
 
-        logger.LogInformation("Seeded initial admin user: {Email}", email);
+        logger.LogInformation("Seeded {Role} user: {Email}", role, email);
     }
 }
