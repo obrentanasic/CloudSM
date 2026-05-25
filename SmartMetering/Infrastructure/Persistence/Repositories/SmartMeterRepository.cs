@@ -20,6 +20,9 @@ public sealed class SmartMeterRepository : ISmartMeterRepository
         return _db.SmartMeters.FirstOrDefaultAsync(m => m.SerialNumber == serial, ct);
     }
 
+    public Task<SmartMeter?> GetByDeviceTokenAsync(string deviceAccessToken, CancellationToken ct = default) =>
+        _db.SmartMeters.FirstOrDefaultAsync(m => m.DeviceAccessToken == deviceAccessToken, ct);
+
     public async Task<IReadOnlyList<SmartMeter>> GetByPropertyAsync(EntityId propertyId, CancellationToken ct = default) =>
         await _db.SmartMeters
             .Where(m => m.PropertyId == propertyId)

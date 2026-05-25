@@ -20,7 +20,11 @@ var jwtOptions = config.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? 
 var sendGridOptions = config.GetSection(SendGridOptions.SectionName).Get<SendGridOptions>() ?? new SendGridOptions();
 var authLinks = config.GetSection("AuthLinks").Get<AuthLinkOptions>() ?? new AuthLinkOptions();
 
-builder.Services.AddInfrastructure(sqlConnectionString, jwtOptions, sendGridOptions);
+builder.Services
+    .AddPersistence(sqlConnectionString)
+    .AddSerialization()
+    .AddSecurity(jwtOptions)
+    .AddEmail(sendGridOptions);
 builder.Services.AddApplication();
 builder.Services.AddSingleton(authLinks);
 

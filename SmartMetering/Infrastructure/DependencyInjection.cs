@@ -7,16 +7,14 @@ using SmartMetering.Infrastructure.Persistence;
 using SmartMetering.Infrastructure.Persistence.Repositories;
 using SmartMetering.Infrastructure.Security;
 using SmartMetering.Infrastructure.Serialization;
+using SmartMetering.Infrastructure.Storage;
 
 namespace SmartMetering.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(
-        this IServiceCollection services,
-        string sqlConnectionString,
-        JwtOptions jwtOptions,
-        SendGridOptions sendGridOptions)
+    /// <summary>Azure SQL via EF Core + relational repositories + device token factory.</summary>
+    public static IServiceCollection AddPersistence(this IServiceCollection services, string sqlConnectionString)
     {
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(
@@ -29,14 +27,39 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
         services.AddScoped<ISmartMeterRepository, SmartMeterRepository>();
+        services.AddSingleton<IDeviceTokenFactory, DeviceTokenFactory>();
 
+        return services;
+    }
+
+    /// <summary>Azure Table Storage repositories + the telemetry queue sender.</summary>
+    public static IServiceCollection AddStorage(this IServiceCollection services, string storageConnectionString)
+    {
+        services.AddSingleton(new StorageOptions(storageConnectionString));
+        services.AddScoped<ITelemetryRepository, TelemetryTableRepository>();
+        services.AddScoped<IMeterStatusRepository, MeterStatusTableRepository>();
+        services.AddSingleton<ITelemetryQueue, TelemetryQueue>();
+        return services;
+    }
+
+    public static IServiceCollection AddSerialization(this IServiceCollection services)
+    {
+        services.AddSingleton<IJsonSerializer, SystemTextJsonSerializer>();
+        return services;
+    }
+
+    public static IServiceCollection AddSecurity(this IServiceCollection services, JwtOptions jwtOptions)
+    {
         services.AddSingleton(jwtOptions);
-        services.AddSingleton(sendGridOptions);
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddSingleton<IJwtTokenGenerator, JwtTokenGenerator>();
-        services.AddSingleton<IEmailService, SendGridEmailService>();
-        services.AddSingleton<IJsonSerializer, SystemTextJsonSerializer>();
+        return services;
+    }
 
+    public static IServiceCollection AddEmail(this IServiceCollection services, SendGridOptions sendGridOptions)
+    {
+        services.AddSingleton(sendGridOptions);
+        services.AddSingleton<IEmailService, SendGridEmailService>();
         return services;
     }
 }
