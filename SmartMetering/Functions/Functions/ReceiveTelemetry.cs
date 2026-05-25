@@ -60,6 +60,7 @@ public sealed class ReceiveTelemetry
         var message = new TelemetryQueueMessage
         {
             MeterId = meter.Id.Value,
+            PropertyId = meter.PropertyId.Value,
             SerialNumber = meter.SerialNumber,
             ConnectionType = (int)meter.ConnectionType,
             TotalEnergyKwh = request.TotalEnergyKwh,

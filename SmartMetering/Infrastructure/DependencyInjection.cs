@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<ITelemetryRepository, TelemetryTableRepository>();
         services.AddScoped<IMeterStatusRepository, MeterStatusTableRepository>();
         services.AddSingleton<ITelemetryQueue, TelemetryQueue>();
+        services.AddSingleton<IMeterStatusQueue, MeterStatusQueue>();
         return services;
     }
 

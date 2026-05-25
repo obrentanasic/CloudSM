@@ -38,6 +38,8 @@ public sealed class TelemetryQueueMessage
 {
     public Guid MeterId { get; set; }
 
+    public Guid PropertyId { get; set; }
+
     public string SerialNumber { get; set; } = string.Empty;
 
     public int ConnectionType { get; set; }

@@ -9,4 +9,5 @@ public sealed class StorageOptions
     public const string TelemetriesTable = "Telemetries";
     public const string MeterStatusesTable = "MeterStatuses";
     public const string TelemetryQueue = "telemetry-queue";
+    public const string MeterStatusQueue = "meterstatus-queue";
 }

@@ -8,6 +8,8 @@ using SmartMetering.Infrastructure;
 using SmartMetering.Infrastructure.Email;
 using SmartMetering.Infrastructure.Persistence;
 using SmartMetering.Infrastructure.Security;
+using SmartMetering.WebApi.BackgroundServices;
+using SmartMetering.WebApi.Hubs;
 using SmartMetering.WebApi.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,6 +17,8 @@ var config = builder.Configuration;
 
 var sqlConnectionString = config.GetConnectionString("SqlDatabase")
     ?? throw new InvalidOperationException("Missing connection string 'SqlDatabase'.");
+var storageConnectionString = config["StorageConnectionString"]
+    ?? throw new InvalidOperationException("Missing setting 'StorageConnectionString'.");
 
 var jwtOptions = config.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 var sendGridOptions = config.GetSection(SendGridOptions.SectionName).Get<SendGridOptions>() ?? new SendGridOptions();
@@ -22,11 +26,13 @@ var authLinks = config.GetSection("AuthLinks").Get<AuthLinkOptions>() ?? new Aut
 
 builder.Services
     .AddPersistence(sqlConnectionString)
+    .AddStorage(storageConnectionString)
     .AddSerialization()
     .AddSecurity(jwtOptions)
     .AddEmail(sendGridOptions);
 builder.Services.AddApplication();
 builder.Services.AddSingleton(authLinks);
+builder.Services.AddHostedService<MeterStatusWorker>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -42,9 +48,26 @@ builder.Services
             ValidAudience = jwtOptions.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
         };
+
+        // SignalR sends the JWT as a query-string token on the WebSocket handshake.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddSignalR();
 
 const string corsPolicy = "SmartMeteringClient";
 builder.Services.AddCors(options =>
@@ -92,5 +115,6 @@ app.UseCors(corsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<TelemetryHub>("/hubs/telemetry");
 
 app.Run();
