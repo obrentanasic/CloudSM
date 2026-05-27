@@ -18,6 +18,11 @@ public static class MeterStatusMapper
         LastVoltage = s.LastVoltage,
         CurrentTariff = (int)s.CurrentTariff,
         LastHeartbeatUtc = new DateTimeOffset(DateTime.SpecifyKind(s.LastHeartbeatUtc, DateTimeKind.Utc)),
+        VoltageAlerted = s.VoltageAlerted,
+        LoadAlerted = s.LoadAlerted,
+        OfflineAlerted = s.OfflineAlerted,
+        MonthBaselineKwh = s.MonthBaselineKwh,
+        BaselineMonth = s.BaselineMonth,
     };
 
     public static MeterStatus ToDomain(MeterStatusEntity e) =>
@@ -29,5 +34,10 @@ public static class MeterStatusMapper
             e.LastLoadKw,
             e.LastVoltage,
             (TariffPeriod)e.CurrentTariff,
-            e.LastHeartbeatUtc.UtcDateTime);
+            e.LastHeartbeatUtc.UtcDateTime,
+            e.VoltageAlerted,
+            e.LoadAlerted,
+            e.OfflineAlerted,
+            e.MonthBaselineKwh,
+            e.BaselineMonth);
 }

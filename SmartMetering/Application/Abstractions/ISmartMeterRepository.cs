@@ -13,6 +13,8 @@ public interface ISmartMeterRepository
 
     Task<IReadOnlyList<SmartMeter>> GetByPropertyAsync(EntityId propertyId, CancellationToken ct = default);
 
+    Task<IReadOnlyList<SmartMeter>> GetByOwnerAsync(EntityId ownerId, CancellationToken ct = default);
+
     Task<bool> SerialExistsAsync(string serialNumber, CancellationToken ct = default);
 
     Task<bool> AnyForPropertyAsync(EntityId propertyId, CancellationToken ct = default);

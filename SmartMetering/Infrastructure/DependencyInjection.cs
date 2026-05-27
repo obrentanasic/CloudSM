@@ -27,6 +27,7 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPropertyRepository, PropertyRepository>();
         services.AddScoped<ISmartMeterRepository, SmartMeterRepository>();
+        services.AddScoped<IConsumptionLimitRepository, ConsumptionLimitRepository>();
         services.AddSingleton<IDeviceTokenFactory, DeviceTokenFactory>();
 
         return services;
@@ -40,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<IMeterStatusRepository, MeterStatusTableRepository>();
         services.AddSingleton<ITelemetryQueue, TelemetryQueue>();
         services.AddSingleton<IMeterStatusQueue, MeterStatusQueue>();
+        services.AddSingleton<IAlertQueue, AlertQueue>();
         return services;
     }
 

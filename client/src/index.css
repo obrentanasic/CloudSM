@@ -58,3 +58,18 @@ button:disabled { opacity: 0.6; }
 .chart h3 { margin: 0 0 10px; font-size: 15px; }
 
 @media (max-width: 860px) { .charts { grid-template-columns: 1fr; } }
+
+/* ── Limit panel ────────────────────────────────────────── */
+.limit-panel { margin-top: 4px; }
+.limit-title { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.limit-icon { font-size: 18px; }
+.limit-display { display: flex; align-items: baseline; gap: 6px; margin-top: 8px; }
+.limit-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+.limit-unit { font-size: 15px; font-weight: 600; color: var(--muted); }
+
+.limit-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-top: 10px; }
+.limit-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.limit-form input,
+.limit-form select { width: 160px; }
+.limit-actions { display: flex; gap: 8px; align-items: center; }
+

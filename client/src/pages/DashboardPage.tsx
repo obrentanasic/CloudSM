@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useTelemetryHub } from '../hooks/useTelemetryHub';
 import { TariffBarChart, VoltageLoadChart } from '../components/Charts';
+import { LimitPanel } from '../components/LimitPanel';
 import type { Meter, MeterLiveUpdate, MeterStatus, Property, TelemetryPoint } from '../types';
 import { TariffLabel } from '../types';
 
@@ -134,6 +135,7 @@ export function DashboardPage() {
             <VoltageLoadChart points={points} />
             <TariffBarChart points={points} />
           </section>
+          {user?.role === 'Consumer' && <LimitPanel />}
         </main>
       ) : (
         <p className="muted pad">Додајте објекат да бисте почели.</p>

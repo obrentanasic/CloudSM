@@ -29,6 +29,9 @@ public sealed class UserRepository : IUserRepository
         return _db.Users.AnyAsync(u => u.Email == normalized, ct);
     }
 
+    public async Task<IReadOnlyList<User>> GetByRoleAsync(UserRole role, CancellationToken ct = default) =>
+        await _db.Users.Where(u => u.Role == role).ToListAsync(ct);
+
     public async Task AddAsync(User user, CancellationToken ct = default) =>
         await _db.Users.AddAsync(user, ct);
 

@@ -2,6 +2,7 @@ using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using SmartMetering.Infrastructure;
+using SmartMetering.Infrastructure.Email;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
@@ -13,9 +14,17 @@ var sqlConnectionString = config["SqlConnectionString"]
 var storageConnectionString = config["StorageConnectionString"]
     ?? throw new InvalidOperationException("Missing setting 'StorageConnectionString'.");
 
+var sendGridOptions = new SendGridOptions
+{
+    ApiKey = config["SendGridApiKey"] ?? string.Empty,
+    FromEmail = config["SendGridFromEmail"] ?? string.Empty,
+    FromName = config["SendGridFromName"] ?? "Smart Metering",
+};
+
 builder.Services
     .AddPersistence(sqlConnectionString)
     .AddStorage(storageConnectionString)
-    .AddSerialization();
+    .AddSerialization()
+    .AddEmail(sendGridOptions);
 
 builder.Build().Run();

@@ -29,6 +29,11 @@ public sealed class SmartMeterRepository : ISmartMeterRepository
             .OrderByDescending(m => m.CreatedAtUtc)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<SmartMeter>> GetByOwnerAsync(EntityId ownerId, CancellationToken ct = default) =>
+        await _db.SmartMeters
+            .Where(m => _db.Properties.Any(p => p.Id == m.PropertyId && p.OwnerId == ownerId))
+            .ToListAsync(ct);
+
     public Task<bool> SerialExistsAsync(string serialNumber, CancellationToken ct = default)
     {
         var serial = serialNumber.Trim().ToUpper();

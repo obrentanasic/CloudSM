@@ -13,6 +13,8 @@ public interface IUserRepository
 
     Task<bool> EmailExistsAsync(string email, CancellationToken ct = default);
 
+    Task<IReadOnlyList<User>> GetByRoleAsync(UserRole role, CancellationToken ct = default);
+
     Task AddAsync(User user, CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);

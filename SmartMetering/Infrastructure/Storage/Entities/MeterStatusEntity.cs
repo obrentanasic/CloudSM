@@ -23,4 +23,14 @@ public sealed class MeterStatusEntity : BaseTableEntity
     public int CurrentTariff { get; set; }
 
     public DateTimeOffset LastHeartbeatUtc { get; set; }
+
+    public bool VoltageAlerted { get; set; }
+
+    public bool LoadAlerted { get; set; }
+
+    public bool OfflineAlerted { get; set; }
+
+    public double MonthBaselineKwh { get; set; }
+
+    public string? BaselineMonth { get; set; }
 }

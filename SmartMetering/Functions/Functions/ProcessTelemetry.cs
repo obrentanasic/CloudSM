@@ -1,35 +1,51 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using SmartMetering.Application.Abstractions;
+using SmartMetering.Application.Alerts;
 using SmartMetering.Application.Ingestion;
 using SmartMetering.Application.Realtime;
+using SmartMetering.Domain.Alerts;
 using SmartMetering.Domain.Common;
+using SmartMetering.Domain.Limits;
 using SmartMetering.Domain.Meters;
 using SmartMetering.Domain.Metering;
 
 namespace SmartMetering.Functions.Functions;
 
 /// <summary>
-/// Queue-triggered processor. Persists the measurement history first (priority persistence), then
-/// updates the meter's current-state snapshot (eventual consistency — a failed status write is
-/// corrected by the next cycle).
+/// Queue-triggered processor. Persists history (priority), updates the snapshot (eventual consistency),
+/// evaluates real-time anomaly rules (voltage drop / load spike / consumption limit), and pushes a live update.
 /// </summary>
 public sealed class ProcessTelemetry
 {
+    private const double VoltageThresholdVolts = 190;
+
     private readonly ITelemetryRepository _telemetry;
     private readonly IMeterStatusRepository _status;
     private readonly IMeterStatusQueue _liveUpdates;
+    private readonly IAlertQueue _alerts;
+    private readonly IPropertyRepository _properties;
+    private readonly ISmartMeterRepository _meters;
+    private readonly IConsumptionLimitRepository _limits;
     private readonly ILogger<ProcessTelemetry> _logger;
 
     public ProcessTelemetry(
         ITelemetryRepository telemetry,
         IMeterStatusRepository status,
         IMeterStatusQueue liveUpdates,
+        IAlertQueue alerts,
+        IPropertyRepository properties,
+        ISmartMeterRepository meters,
+        IConsumptionLimitRepository limits,
         ILogger<ProcessTelemetry> logger)
     {
         _telemetry = telemetry;
         _status = status;
         _liveUpdates = liveUpdates;
+        _alerts = alerts;
+        _properties = properties;
+        _meters = meters;
+        _limits = limits;
         _logger = logger;
     }
 
@@ -38,8 +54,9 @@ public sealed class ProcessTelemetry
         [QueueTrigger(StorageQueues.Telemetry, Connection = "StorageConnectionString")] TelemetryQueueMessage message,
         CancellationToken ct)
     {
+        var meterId = EntityId.From(message.MeterId);
         var telemetry = Telemetry.Create(
-            EntityId.From(message.MeterId),
+            meterId,
             message.SerialNumber,
             (ConnectionType)message.ConnectionType,
             message.TotalEnergyKwh,
@@ -52,42 +69,156 @@ public sealed class ProcessTelemetry
         // 1. Priority persistence: never lose a measurement.
         await _telemetry.SaveAsync(telemetry, ct);
 
-        // 2. Eventual consistency: snapshot update may fail and be corrected next cycle.
+        // 2. Snapshot (carry alert flags + monthly baseline from the previous snapshot).
+        var status = await _status.GetByMeterAsync(meterId, ct)
+            ?? MeterStatus.CreateNew(meterId, telemetry.SerialNumber, telemetry.ConnectionType);
+        status.ApplyTelemetry(telemetry);
+
+        // 3. Real-time anomaly detection (with once-per-episode dedup via status flags).
+        await EvaluateVoltageAsync(status, telemetry, ct);
+        await EvaluateLoadAsync(status, telemetry, ct);
+
         try
         {
-            await _status.SaveAsync(MeterStatus.FromTelemetry(telemetry), ct);
+            await _status.SaveAsync(status, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Status snapshot update failed for meter {Serial}; will self-heal next cycle.", message.SerialNumber);
+            _logger.LogWarning(ex, "Status snapshot update failed for {Serial}; self-heals next cycle.", message.SerialNumber);
         }
 
-        // 3. Push a live update for the dashboard (best-effort).
+        // 4. Consumption-limit check (best-effort).
+        await EvaluateLimitAsync(message, telemetry, ct);
+
+        // 5. Live dashboard update (best-effort).
+        await PushLiveUpdateAsync(message, telemetry, ct);
+
+        _logger.LogInformation("Processed telemetry for {Serial} ({Tariff}).", telemetry.SerialNumber, telemetry.Tariff);
+    }
+
+    private async Task EvaluateVoltageAsync(MeterStatus status, Telemetry t, CancellationToken ct)
+    {
+        var voltage = t.RepresentativeVoltage;
+        if (voltage is { } v && v < VoltageThresholdVolts)
+        {
+            if (status.FlagVoltageAlert())
+            {
+                await _alerts.EnqueueAsync(Alert(AlertType.VoltageDrop, AlertSeverity.Critical, AlertAudience.Admin, t,
+                    $"Критичан пад напона: {v:F1} V (бројило {t.SerialNumber})."), ct);
+            }
+        }
+        else
+        {
+            status.ClearVoltageAlert();
+        }
+    }
+
+    private async Task EvaluateLoadAsync(MeterStatus status, Telemetry t, CancellationToken ct)
+    {
+        var maxKw = (double)SmartMeter.PowerFor(t.ConnectionType);
+        if (t.CurrentLoadKw > maxKw)
+        {
+            if (status.FlagLoadAlert())
+            {
+                await _alerts.EnqueueAsync(Alert(AlertType.LoadSpike, AlertSeverity.Warning, AlertAudience.Admin, t,
+                    $"Нагли скок потрошње: {t.CurrentLoadKw:F2} kW (> {maxKw:F2} kW) на бројилу {t.SerialNumber}."), ct);
+            }
+        }
+        else
+        {
+            status.ClearLoadAlert();
+        }
+    }
+
+    private async Task EvaluateLimitAsync(TelemetryQueueMessage message, Telemetry t, CancellationToken ct)
+    {
+        var property = await _properties.GetByIdAsync(EntityId.From(message.PropertyId), ct);
+        if (property is null)
+        {
+            return;
+        }
+
+        var limit = await _limits.GetByUserAsync(property.OwnerId, ct);
+        // RSD limits require tariff prices (Phase 7); only kWh limits are enforced here.
+        if (limit is null || limit.Unit != LimitUnit.Kwh)
+        {
+            return;
+        }
+
+        var month = t.ObservationTime.ToString("yyyy-MM");
+        if (!limit.ShouldAlert(month))
+        {
+            return;
+        }
+
+        var meters = await _meters.GetByOwnerAsync(property.OwnerId, ct);
+        double monthTotal = 0;
+        foreach (var meter in meters)
+        {
+            var st = await _status.GetByMeterAsync(meter.Id, ct);
+            if (st is not null)
+            {
+                monthTotal += st.MonthConsumptionKwh;
+            }
+        }
+
+        if (monthTotal > (double)limit.Value)
+        {
+            await _alerts.EnqueueAsync(new AlertMessage
+            {
+                Type = (int)AlertType.ConsumptionLimit,
+                Severity = (int)AlertSeverity.Warning,
+                Audience = (int)AlertAudience.Consumer,
+                ConsumerUserId = property.OwnerId.Value,
+                MeterId = message.MeterId,
+                SerialNumber = message.SerialNumber,
+                Message = $"Прекорачили сте лимит потрошње: {monthTotal:F1} kWh од {limit.Value:F0} kWh у месецу {month}.",
+                OccurredAtUtc = DateTime.UtcNow,
+            }, ct);
+
+            limit.MarkAlerted(month);
+            await _limits.SaveChangesAsync(ct);
+        }
+    }
+
+    private async Task PushLiveUpdateAsync(TelemetryQueueMessage message, Telemetry t, CancellationToken ct)
+    {
         try
         {
             await _liveUpdates.EnqueueAsync(new MeterLiveUpdate
             {
                 PropertyId = message.PropertyId,
                 MeterId = message.MeterId,
-                SerialNumber = telemetry.SerialNumber,
-                ConnectionType = (int)telemetry.ConnectionType,
-                TotalEnergyKwh = telemetry.TotalEnergyKwh,
-                CurrentLoadKw = telemetry.CurrentLoadKw,
-                Voltage = telemetry.RepresentativeVoltage,
-                Tariff = (int)telemetry.Tariff,
-                ObservationTime = telemetry.ObservationTime,
+                SerialNumber = t.SerialNumber,
+                ConnectionType = (int)t.ConnectionType,
+                TotalEnergyKwh = t.TotalEnergyKwh,
+                CurrentLoadKw = t.CurrentLoadKw,
+                Voltage = t.RepresentativeVoltage,
+                Tariff = (int)t.Tariff,
+                ObservationTime = t.ObservationTime,
             }, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Live update enqueue failed for meter {Serial}.", message.SerialNumber);
+            _logger.LogWarning(ex, "Live update enqueue failed for {Serial}.", message.SerialNumber);
         }
-
-        _logger.LogInformation("Processed telemetry for {Serial} ({Tariff}).", telemetry.SerialNumber, telemetry.Tariff);
     }
+
+    private static AlertMessage Alert(AlertType type, AlertSeverity severity, AlertAudience audience, Telemetry t, string message) =>
+        new()
+        {
+            Type = (int)type,
+            Severity = (int)severity,
+            Audience = (int)audience,
+            MeterId = t.MeterId.Value,
+            SerialNumber = t.SerialNumber,
+            Message = message,
+            OccurredAtUtc = DateTime.UtcNow,
+        };
 }
 
 internal static class StorageQueues
 {
     public const string Telemetry = "telemetry-queue";
+    public const string Alerts = "alert-queue";
 }

@@ -62,3 +62,17 @@ export interface MeterLiveUpdate {
 }
 
 export const TariffLabel = (t: number) => (t === 0 ? 'ВТ' : 'НТ');
+
+/** 0 = RSD, 1 = kWh — mirrors Domain.Limits.LimitUnit */
+export const LimitUnit = { Rsd: 0, Kwh: 1 } as const;
+export const LimitUnitLabel = (u: number) => (u === 0 ? 'РСД' : 'kWh');
+
+export interface LimitDto {
+  value: number;
+  unit: number;
+}
+
+export interface SetLimitRequest {
+  value: number;
+  unit: number;
+}
