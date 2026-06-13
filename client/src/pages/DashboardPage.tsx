@@ -143,7 +143,7 @@ function ConsumerDashboard() {
             <TariffBarChart points={points} />
           </section>
           {user?.role === 'Consumer' && <LimitPanel />}
-          <InvoicePanel propertyId={activeId} />
+          <InvoicePanel propertyId={activeId} meterId={selectedMeterId} />
         </main>
       ) : (
         <p className="muted pad">Додајте објекат да бисте почели.</p>

@@ -27,7 +27,9 @@ public sealed class TariffModelConfiguration : IEntityTypeConfiguration<TariffMo
         builder.Property(t => t.RedLowPriceRsd).HasPrecision(18, 4);
         builder.Property(t => t.PowerPriceRsdPerKw).HasPrecision(18, 4);
         builder.Property(t => t.SupplierFeeRsd).HasPrecision(18, 2);
-        builder.HasIndex(t => t.IsActive);
+        builder.HasIndex(t => t.IsActive)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
 
         builder.Ignore(t => t.DomainEvents);
     }

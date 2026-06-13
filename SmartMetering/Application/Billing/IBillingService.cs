@@ -14,7 +14,15 @@ public interface IBillingService
 
     Task<GeneratedInvoicesDto> GenerateMonthlyInvoicesAsync(int year, int month, CancellationToken ct = default);
 
-    Task<InvoicePageDto> GetPropertyInvoicesAsync(EntityId ownerId, Guid propertyId, int page, int pageSize, CancellationToken ct = default);
+    Task<InvoicePageDto> GetPropertyInvoicesAsync(
+        EntityId ownerId,
+        Guid propertyId,
+        Guid? meterId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
 
     Task<InvoiceFileDto> GetInvoicePdfAsync(EntityId ownerId, Guid invoiceId, CancellationToken ct = default);
 }

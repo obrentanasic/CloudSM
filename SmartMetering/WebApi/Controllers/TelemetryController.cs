@@ -18,6 +18,16 @@ public sealed class TelemetryController : ApiControllerBase
         Guid meterId, [FromQuery] int take = 100, CancellationToken ct = default) =>
         Ok(await _analytics.GetRecentTelemetryAsync(CurrentUserId, meterId, take, ct));
 
+    /// <summary>Chronological measurement history for the consumer's digital consumption card.</summary>
+    [HttpGet("meters/{meterId:guid}/telemetry/history")]
+    public async Task<ActionResult<TelemetryHistoryDto>> GetHistory(
+        Guid meterId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int take = 500,
+        CancellationToken ct = default) =>
+        Ok(await _analytics.GetTelemetryHistoryAsync(CurrentUserId, meterId, from, to, take, ct));
+
     /// <summary>Current snapshot for a single meter (status card).</summary>
     [HttpGet("meters/{meterId:guid}/status")]
     public async Task<ActionResult<MeterStatusDto>> GetStatus(Guid meterId, CancellationToken ct)

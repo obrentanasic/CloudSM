@@ -57,6 +57,10 @@ public sealed class ReceiveTelemetry
             return new BadRequestObjectResult(new { error = "Invalid telemetry payload." });
         }
 
+        var observationTime = request.ObservationTime == default
+            ? DateTime.UtcNow
+            : NormalizeUtc(request.ObservationTime);
+
         var message = new TelemetryQueueMessage
         {
             MeterId = meter.Id.Value,
@@ -65,7 +69,7 @@ public sealed class ReceiveTelemetry
             ConnectionType = (int)meter.ConnectionType,
             TotalEnergyKwh = request.TotalEnergyKwh,
             CurrentLoadKw = request.CurrentLoadKw,
-            ObservationTime = request.ObservationTime == default ? DateTime.UtcNow : request.ObservationTime,
+            ObservationTime = observationTime,
             VoltageL1 = request.VoltageL1,
             VoltageL2 = request.VoltageL2,
             VoltageL3 = request.VoltageL3,
@@ -82,4 +86,12 @@ public sealed class ReceiveTelemetry
 
         return new AcceptedResult();
     }
+
+    private static DateTime NormalizeUtc(DateTime value) =>
+        value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+        };
 }

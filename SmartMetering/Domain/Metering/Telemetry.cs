@@ -88,8 +88,38 @@ public sealed class Telemetry : AggregateRoot
         }
     }
 
-    public static TariffPeriod ClassifyTariff(DateTime observationTime) =>
-        observationTime.Hour is >= 7 and < 23 ? TariffPeriod.High : TariffPeriod.Low;
+    public static TariffPeriod ClassifyTariff(DateTime observationTime)
+    {
+        var utc = observationTime.Kind switch
+        {
+            DateTimeKind.Utc => observationTime,
+            DateTimeKind.Local => observationTime.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(observationTime, DateTimeKind.Utc),
+        };
+        var tariffTime = TimeZoneInfo.ConvertTimeFromUtc(utc, TariffTimeZone);
+        return tariffTime.Hour is >= 7 and < 23 ? TariffPeriod.High : TariffPeriod.Low;
+    }
+
+    private static readonly TimeZoneInfo TariffTimeZone = ResolveTariffTimeZone();
+
+    private static TimeZoneInfo ResolveTariffTimeZone()
+    {
+        foreach (var id in new[] { "Central Europe Standard Time", "Europe/Sarajevo", "Europe/Belgrade" })
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(id);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+            }
+            catch (InvalidTimeZoneException)
+            {
+            }
+        }
+
+        return TimeZoneInfo.Local;
+    }
 
     public static Telemetry Create(
         EntityId meterId,

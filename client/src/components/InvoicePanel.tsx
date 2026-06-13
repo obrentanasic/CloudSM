@@ -1,23 +1,50 @@
 import { useEffect, useState } from 'react';
 import { API_BASE, getToken } from '../api/client';
 import { api } from '../api/client';
-import type { InvoicePage } from '../types';
+import type { InvoicePage, TelemetryHistory } from '../types';
+import { TariffLabel } from '../types';
 
 const money = (value: number) => value.toLocaleString('sr-Latn', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kwh = (value: number) => value.toLocaleString('sr-Latn', { maximumFractionDigits: 3 });
 
-export function InvoicePanel({ propertyId }: { propertyId: string }) {
+function toInputDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+export function InvoicePanel({ propertyId, meterId }: { propertyId: string; meterId: string | null }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<InvoicePage | null>(null);
+  const [history, setHistory] = useState<TelemetryHistory | null>(null);
+  const [from, setFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return toInputDate(d);
+  });
+  const [to, setTo] = useState(() => toInputDate(new Date()));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setPage(1);
-  }, [propertyId]);
+  }, [propertyId, meterId, from, to]);
 
   useEffect(() => {
+    if (!meterId || !from || !to) {
+      setData(null);
+      return;
+    }
+
     let cancelled = false;
-    api.get<InvoicePage>(`/api/billing/properties/${propertyId}/invoices?page=${page}&pageSize=5`)
+    const fromIso = new Date(`${from}T00:00:00.000Z`).toISOString();
+    const toIso = new Date(`${to}T23:59:59.999Z`).toISOString();
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: '5',
+      meterId,
+      from: fromIso,
+      to: toIso,
+    });
+
+    api.get<InvoicePage>(`/api/billing/properties/${propertyId}/invoices?${params.toString()}`)
       .then((response) => {
         if (!cancelled) {
           setData(response);
@@ -26,7 +53,31 @@ export function InvoicePanel({ propertyId }: { propertyId: string }) {
       })
       .catch((err) => { if (!cancelled) setError((err as Error).message); });
     return () => { cancelled = true; };
-  }, [propertyId, page]);
+  }, [propertyId, meterId, page, from, to]);
+
+  useEffect(() => {
+    if (!meterId) {
+      setHistory(null);
+      return;
+    }
+
+    if (!from || !to) {
+      return;
+    }
+
+    let cancelled = false;
+    const fromIso = new Date(`${from}T00:00:00.000Z`).toISOString();
+    const toIso = new Date(`${to}T23:59:59.999Z`).toISOString();
+    api.get<TelemetryHistory>(`/api/meters/${meterId}/telemetry/history?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}&take=500`)
+      .then((response) => {
+        if (!cancelled) {
+          setHistory(response);
+          setError(null);
+        }
+      })
+      .catch((err) => { if (!cancelled) setError((err as Error).message); });
+    return () => { cancelled = true; };
+  }, [meterId, from, to]);
 
   async function downloadPdf(id: string) {
     setError(null);
@@ -54,12 +105,44 @@ export function InvoicePanel({ propertyId }: { propertyId: string }) {
   return (
     <section className="invoice-panel card">
       <div className="row between">
-        <h3>Дигитални картон рачуна</h3>
+        <h3>Дигитални картон потрошње и рачуна</h3>
         {data && data.totalCount > 0 && <span className="muted small">{data.totalCount} укупно</span>}
       </div>
       {error && <div className="error">{error}</div>}
 
-      {data && data.items.length > 0 ? (
+      <div className="history-filter">
+        <label>
+          Од
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label>
+          До
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </label>
+        {history && <span className="muted small">{history.serialNumber} · {history.points.length} очитавања</span>}
+      </div>
+
+      {meterId && history && history.points.length > 0 && (
+        <div className="reading-list">
+          {history.points.map((point) => (
+            <div className="reading-row" key={`${point.observationTime}-${point.totalEnergyKwh}`}>
+              <span>{new Date(point.observationTime).toLocaleString('sr-RS')}</span>
+              <b>{kwh(point.totalEnergyKwh)} kWh</b>
+              <span>{point.currentLoadKw.toFixed(2)} kW</span>
+              <span>{point.voltage != null ? `${point.voltage.toFixed(1)} V` : '—'}</span>
+              <span>{TariffLabel(point.tariff)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {meterId && history && history.points.length === 0 && (
+        <p className="muted small">Нема очитавања за изабрани период.</p>
+      )}
+
+      {!meterId && <p className="muted small">Изаберите бројило да видите очитавања.</p>}
+
+      {meterId && data && data.items.length > 0 ? (
         <>
           <div className="invoice-list">
             {data.items.map((invoice) => (
@@ -89,9 +172,9 @@ export function InvoicePanel({ propertyId }: { propertyId: string }) {
             <button className="link" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Следећа</button>
           </div>
         </>
-      ) : (
-        <p className="muted small">Још нема генерисаних рачуна за овај објекат.</p>
-      )}
+      ) : meterId ? (
+        <p className="muted small">Још нема генерисаних рачуна за изабрано бројило и период.</p>
+      ) : null}
     </section>
   );
 }

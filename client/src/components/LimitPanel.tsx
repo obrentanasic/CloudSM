@@ -31,7 +31,7 @@ export function LimitPanel() {
   async function save(e: FormEvent) {
     e.preventDefault();
     const parsed = parseFloat(value);
-    if (isNaN(parsed) || parsed < 0) {
+    if (isNaN(parsed) || parsed <= 0) {
       setError('Унесите позитиван број.');
       return;
     }
@@ -86,7 +86,7 @@ export function LimitPanel() {
             <input
               id="limit-value"
               type="number"
-              min="0"
+              min="0.001"
               step="any"
               value={value}
               onChange={(e) => setValue(e.target.value)}

@@ -120,6 +120,12 @@ export interface InvoicePage {
   totalCount: number;
 }
 
+export interface TelemetryHistory {
+  meterId: string;
+  serialNumber: string;
+  points: TelemetryPoint[];
+}
+
 export interface GeneratedInvoices {
   year: number;
   month: number;

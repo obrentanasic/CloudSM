@@ -23,6 +23,8 @@ public static class MeterStatusMapper
         OfflineAlerted = s.OfflineAlerted,
         MonthBaselineKwh = s.MonthBaselineKwh,
         BaselineMonth = s.BaselineMonth,
+        MonthHighTariffKwh = s.MonthHighTariffKwh,
+        MonthLowTariffKwh = s.MonthLowTariffKwh,
     };
 
     public static MeterStatus ToDomain(MeterStatusEntity e) =>
@@ -39,5 +41,7 @@ public static class MeterStatusMapper
             e.LoadAlerted,
             e.OfflineAlerted,
             e.MonthBaselineKwh,
-            e.BaselineMonth);
+            e.BaselineMonth,
+            e.MonthHighTariffKwh,
+            e.MonthLowTariffKwh);
 }

@@ -7,6 +7,11 @@ public sealed record TelemetryPointDto(
     double? Voltage,
     int Tariff);
 
+public sealed record TelemetryHistoryDto(
+    Guid MeterId,
+    string SerialNumber,
+    IReadOnlyList<TelemetryPointDto> Points);
+
 public sealed record MeterStatusDto(
     Guid MeterId,
     string SerialNumber,

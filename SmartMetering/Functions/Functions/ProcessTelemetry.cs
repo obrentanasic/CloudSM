@@ -181,14 +181,18 @@ public sealed class ProcessTelemetry
                 return;
             }
 
-            var monthStart = new DateTime(t.ObservationTime.Year, t.ObservationTime.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-            var monthEnd = t.ObservationTime.AddTicks(1);
             decimal monthTotal = 0;
             foreach (var meter in meters)
             {
-                var readings = await _telemetry.GetForPeriodAsync(meter.Id, monthStart, monthEnd, ct);
-                var previous = await _telemetry.GetPreviousBeforeAsync(meter.Id, monthStart, ct);
-                var consumption = BillingCalculator.CalculateConsumption(readings, previous);
+                var st = await _status.GetByMeterAsync(meter.Id, ct);
+                if (st is null || st.BaselineMonth != month)
+                {
+                    continue;
+                }
+
+                var consumption = new ConsumptionBreakdown(
+                    (decimal)Math.Round(st.MonthHighTariffKwh, 3),
+                    (decimal)Math.Round(st.MonthLowTariffKwh, 3));
                 var breakdown = BillingCalculator.CalculateInvoice(consumption, meter, tariff);
                 monthTotal += breakdown.TotalAmountRsd;
             }

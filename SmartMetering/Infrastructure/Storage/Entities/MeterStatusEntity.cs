@@ -33,4 +33,8 @@ public sealed class MeterStatusEntity : BaseTableEntity
     public double MonthBaselineKwh { get; set; }
 
     public string? BaselineMonth { get; set; }
+
+    public double MonthHighTariffKwh { get; set; }
+
+    public double MonthLowTariffKwh { get; set; }
 }

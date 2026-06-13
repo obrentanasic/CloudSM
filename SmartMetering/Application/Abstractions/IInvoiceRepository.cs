@@ -9,9 +9,23 @@ public interface IInvoiceRepository
 
     Task<bool> ExistsAsync(EntityId meterId, int year, int month, CancellationToken ct = default);
 
-    Task<int> CountByPropertyAsync(EntityId ownerId, EntityId propertyId, CancellationToken ct = default);
+    Task<int> CountByPropertyAsync(
+        EntityId ownerId,
+        EntityId propertyId,
+        EntityId? meterId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        CancellationToken ct = default);
 
-    Task<IReadOnlyList<Invoice>> GetByPropertyAsync(EntityId ownerId, EntityId propertyId, int skip, int take, CancellationToken ct = default);
+    Task<IReadOnlyList<Invoice>> GetByPropertyAsync(
+        EntityId ownerId,
+        EntityId propertyId,
+        EntityId? meterId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
+        int skip,
+        int take,
+        CancellationToken ct = default);
 
     Task AddAsync(Invoice invoice, CancellationToken ct = default);
 

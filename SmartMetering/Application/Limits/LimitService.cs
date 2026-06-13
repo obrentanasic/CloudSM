@@ -1,4 +1,5 @@
 using SmartMetering.Application.Abstractions;
+using SmartMetering.Application.Common;
 using SmartMetering.Domain.Common;
 using SmartMetering.Domain.Limits;
 
@@ -18,6 +19,16 @@ public sealed class LimitService : ILimitService
 
     public async Task SetMineAsync(EntityId userId, SetLimitRequest request, CancellationToken ct = default)
     {
+        if (request.Value <= 0)
+        {
+            throw new AppException("Limit mora biti veci od nule.");
+        }
+
+        if (!Enum.IsDefined(request.Unit))
+        {
+            throw new AppException("Nepoznata jedinica limita.");
+        }
+
         var limit = await _limits.GetByUserAsync(userId, ct);
         if (limit is null)
         {

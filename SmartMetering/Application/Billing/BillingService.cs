@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using SmartMetering.Application.Abstractions;
 using SmartMetering.Application.Common;
 using SmartMetering.Domain.Billing;
@@ -19,6 +20,7 @@ public sealed class BillingService : IBillingService
     private readonly ITelemetryRepository _telemetry;
     private readonly IInvoiceDocumentStorage _documents;
     private readonly IEmailService _email;
+    private readonly ILogger<BillingService> _logger;
 
     public BillingService(
         ITariffModelRepository tariffs,
@@ -28,7 +30,8 @@ public sealed class BillingService : IBillingService
         IUserRepository users,
         ITelemetryRepository telemetry,
         IInvoiceDocumentStorage documents,
-        IEmailService email)
+        IEmailService email,
+        ILogger<BillingService> logger)
     {
         _tariffs = tariffs;
         _invoices = invoices;
@@ -38,6 +41,7 @@ public sealed class BillingService : IBillingService
         _telemetry = telemetry;
         _documents = documents;
         _email = email;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<TariffModelDto>> GetTariffModelsAsync(CancellationToken ct = default)
@@ -186,6 +190,9 @@ public sealed class BillingService : IBillingService
     public async Task<InvoicePageDto> GetPropertyInvoicesAsync(
         EntityId ownerId,
         Guid propertyId,
+        Guid? meterId,
+        DateTime? fromUtc,
+        DateTime? toUtc,
         int page,
         int pageSize,
         CancellationToken ct = default)
@@ -196,11 +203,30 @@ public sealed class BillingService : IBillingService
             throw new NotFoundException("Objekat nije pronadjen.");
         }
 
+        EntityId? filteredMeterId = null;
+        if (meterId is { } requestedMeterId)
+        {
+            var meter = await _meters.GetByIdAsync(EntityId.From(requestedMeterId), ct);
+            if (meter is null || meter.PropertyId != property.Id)
+            {
+                throw new NotFoundException("Brojilo nije pronadjeno.");
+            }
+
+            filteredMeterId = meter.Id;
+        }
+
+        var from = NormalizeUtc(fromUtc);
+        var to = NormalizeUtc(toUtc);
+        if (from is not null && to is not null && to < from)
+        {
+            throw new AppException("Krajnji datum mora biti posle pocetnog datuma.");
+        }
+
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 50);
         var skip = (page - 1) * pageSize;
-        var total = await _invoices.CountByPropertyAsync(ownerId, property.Id, ct);
-        var items = await _invoices.GetByPropertyAsync(ownerId, property.Id, skip, pageSize, ct);
+        var total = await _invoices.CountByPropertyAsync(ownerId, property.Id, filteredMeterId, from, to, ct);
+        var items = await _invoices.GetByPropertyAsync(ownerId, property.Id, filteredMeterId, from, to, skip, pageSize, ct);
 
         return new InvoicePageDto(items.Select(Map).ToList(), page, pageSize, total);
     }
@@ -254,9 +280,13 @@ public sealed class BillingService : IBillingService
                 $"<pre>{WebUtility.HtmlEncode(content)}</pre>",
                 ct);
         }
-        catch
+        catch (Exception ex)
         {
-            // Local development often runs without SendGrid. The generated invoice remains stored.
+            _logger.LogWarning(
+                ex,
+                "Invoice {InvoiceId} was generated but email delivery to {Email} failed.",
+                invoice.Id.Value,
+                consumer.Email);
         }
     }
 
@@ -335,4 +365,14 @@ public sealed class BillingService : IBillingService
     private static string Kwh(decimal value) => $"{value:0.###} kWh";
 
     private static string Money(decimal value) => $"{value:0.00} RSD";
+
+    private static DateTime? NormalizeUtc(DateTime? value) =>
+        value is null
+            ? null
+            : value.Value.Kind switch
+            {
+                DateTimeKind.Utc => value.Value,
+                DateTimeKind.Local => value.Value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc),
+            };
 }

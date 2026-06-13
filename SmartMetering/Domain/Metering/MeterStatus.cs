@@ -39,6 +39,10 @@ public sealed class MeterStatus
 
     public string? BaselineMonth { get; private set; }
 
+    public double MonthHighTariffKwh { get; private set; }
+
+    public double MonthLowTariffKwh { get; private set; }
+
     public double MonthConsumptionKwh => Math.Max(0, LastTotalEnergyKwh - MonthBaselineKwh);
 
     public bool IsOnline(DateTime utcNow) => utcNow - LastHeartbeatUtc < OfflineThreshold;
@@ -55,7 +59,8 @@ public sealed class MeterStatus
         double lastTotalEnergyKwh, double lastLoadKw, double? lastVoltage,
         TariffPeriod currentTariff, DateTime lastHeartbeatUtc,
         bool voltageAlerted, bool loadAlerted, bool offlineAlerted,
-        double monthBaselineKwh, string? baselineMonth) => new()
+        double monthBaselineKwh, string? baselineMonth,
+        double monthHighTariffKwh, double monthLowTariffKwh) => new()
     {
         MeterId = meterId,
         SerialNumber = serialNumber,
@@ -70,10 +75,14 @@ public sealed class MeterStatus
         OfflineAlerted = offlineAlerted,
         MonthBaselineKwh = monthBaselineKwh,
         BaselineMonth = baselineMonth,
+        MonthHighTariffKwh = monthHighTariffKwh,
+        MonthLowTariffKwh = monthLowTariffKwh,
     };
 
     public void ApplyTelemetry(Telemetry t)
     {
+        var previousTotal = LastTotalEnergyKwh;
+        var previousBaselineMonth = BaselineMonth;
         SerialNumber = t.SerialNumber;
         ConnectionType = t.ConnectionType;
         LastTotalEnergyKwh = t.TotalEnergyKwh;
@@ -86,7 +95,22 @@ public sealed class MeterStatus
         if (BaselineMonth != month)
         {
             BaselineMonth = month;
-            MonthBaselineKwh = t.TotalEnergyKwh;
+            MonthBaselineKwh = previousBaselineMonth is null ? t.TotalEnergyKwh : previousTotal;
+            MonthHighTariffKwh = 0;
+            MonthLowTariffKwh = 0;
+        }
+
+        if (previousBaselineMonth is not null)
+        {
+            var delta = Math.Max(0, t.TotalEnergyKwh - previousTotal);
+            if (t.Tariff == TariffPeriod.High)
+            {
+                MonthHighTariffKwh += delta;
+            }
+            else
+            {
+                MonthLowTariffKwh += delta;
+            }
         }
 
         // Receiving data means the device is back online.

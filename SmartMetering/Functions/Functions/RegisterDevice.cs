@@ -46,20 +46,38 @@ public sealed class RegisterDevice
             return new BadRequestObjectResult(new { error = "SerialNumber and DeviceUuid are required." });
         }
 
-        var meter = await _meters.GetBySerialAsync(request.SerialNumber, ct);
+        var serial = request.SerialNumber.Trim().ToUpperInvariant();
+        var deviceUuid = request.DeviceUuid.Trim();
+        if (!Guid.TryParse(deviceUuid, out _))
+        {
+            return new BadRequestObjectResult(new { error = "DeviceUuid must be a valid 128-bit UUID." });
+        }
+
+        var meter = await _meters.GetBySerialAsync(serial, ct);
         if (meter is null)
         {
-            _logger.LogWarning("Handshake failed: no meter with serial {Serial}", request.SerialNumber);
+            _logger.LogWarning("Handshake failed: no meter with serial {Serial}", serial);
             return new NotFoundObjectResult(new { error = "No registered meter matches this serial number." });
         }
 
-        // Re-pairing returns the existing token; first pairing issues a new one.
+        if (meter.PairingStatus == PairingStatus.Paired &&
+            !string.Equals(meter.DeviceUuid, deviceUuid, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Handshake rejected for meter {Serial}: paired UUID {PairedUuid}, attempted UUID {AttemptedUuid}.",
+                meter.SerialNumber,
+                meter.DeviceUuid,
+                deviceUuid);
+            return new ConflictObjectResult(new { error = "Meter is already paired with another device." });
+        }
+
+        // Reconnects from the same device return the existing token; first pairing issues a new one.
         if (meter.PairingStatus != PairingStatus.Paired || string.IsNullOrEmpty(meter.DeviceAccessToken))
         {
             var token = _tokenFactory.Create();
-            meter.CompletePairing(request.DeviceUuid, token);
+            meter.CompletePairing(deviceUuid, token);
             await _meters.SaveChangesAsync(ct);
-            _logger.LogInformation("Meter {Serial} paired with device {Uuid}", meter.SerialNumber, request.DeviceUuid);
+            _logger.LogInformation("Meter {Serial} paired with device {Uuid}", meter.SerialNumber, deviceUuid);
         }
 
         return new OkObjectResult(new RegisterDeviceResponse(meter.DeviceAccessToken!));

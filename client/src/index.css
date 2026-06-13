@@ -80,6 +80,44 @@ button:disabled { opacity: 0.6; }
 .invoice-list,
 .tariff-list { display: grid; gap: 10px; margin-top: 12px; }
 
+.history-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.history-filter label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.reading-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.reading-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) repeat(4, minmax(70px, .7fr));
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.reading-row b { color: var(--text); }
+
 .invoice-row,
 .tariff-row {
   display: grid;
@@ -155,4 +193,5 @@ button:disabled { opacity: 0.6; }
   .tariff-form button { grid-column: auto; }
 
   .invoice-metrics { grid-template-columns: 1fr; }
+  .reading-row { grid-template-columns: 1fr 1fr; }
 }

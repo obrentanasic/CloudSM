@@ -49,10 +49,13 @@ public sealed class BillingController : ApiControllerBase
     [Authorize(Roles = "Consumer")]
     public async Task<ActionResult<InvoicePageDto>> GetPropertyInvoices(
         Guid propertyId,
+        [FromQuery] Guid? meterId,
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 10,
         CancellationToken ct = default) =>
-        Ok(await _billing.GetPropertyInvoicesAsync(CurrentUserId, propertyId, page, pageSize, ct));
+        Ok(await _billing.GetPropertyInvoicesAsync(CurrentUserId, propertyId, meterId, from, to, page, pageSize, ct));
 
     [HttpGet("invoices/{id:guid}/pdf")]
     [Authorize(Roles = "Consumer")]
