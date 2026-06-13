@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using SmartMetering.Application.Analytics;
 using SmartMetering.Application.Authentication;
+using SmartMetering.Application.Billing;
 using SmartMetering.Application.Limits;
 using SmartMetering.Application.Meters;
 using SmartMetering.Application.Properties;
@@ -16,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<IMeterService, MeterService>();
         services.AddScoped<IAnalyticsService, AnalyticsService>();
         services.AddScoped<ILimitService, LimitService>();
+        services.AddScoped<IBillingService, BillingService>();
         return services;
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using SmartMetering.Application;
 using SmartMetering.Infrastructure;
 using SmartMetering.Infrastructure.Email;
 
@@ -26,5 +27,6 @@ builder.Services
     .AddStorage(storageConnectionString)
     .AddSerialization()
     .AddEmail(sendGridOptions);
+builder.Services.AddApplication();
 
 builder.Build().Run();

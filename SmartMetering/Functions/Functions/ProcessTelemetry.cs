@@ -2,6 +2,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using SmartMetering.Application.Abstractions;
 using SmartMetering.Application.Alerts;
+using SmartMetering.Application.Billing;
 using SmartMetering.Application.Ingestion;
 using SmartMetering.Application.Realtime;
 using SmartMetering.Domain.Alerts;
@@ -27,6 +28,7 @@ public sealed class ProcessTelemetry
     private readonly IPropertyRepository _properties;
     private readonly ISmartMeterRepository _meters;
     private readonly IConsumptionLimitRepository _limits;
+    private readonly ITariffModelRepository _tariffs;
     private readonly ILogger<ProcessTelemetry> _logger;
 
     public ProcessTelemetry(
@@ -37,6 +39,7 @@ public sealed class ProcessTelemetry
         IPropertyRepository properties,
         ISmartMeterRepository meters,
         IConsumptionLimitRepository limits,
+        ITariffModelRepository tariffs,
         ILogger<ProcessTelemetry> logger)
     {
         _telemetry = telemetry;
@@ -46,6 +49,7 @@ public sealed class ProcessTelemetry
         _properties = properties;
         _meters = meters;
         _limits = limits;
+        _tariffs = tariffs;
         _logger = logger;
     }
 
@@ -139,8 +143,7 @@ public sealed class ProcessTelemetry
         }
 
         var limit = await _limits.GetByUserAsync(property.OwnerId, ct);
-        // RSD limits require tariff prices (Phase 7); only kWh limits are enforced here.
-        if (limit is null || limit.Unit != LimitUnit.Kwh)
+        if (limit is null)
         {
             return;
         }
@@ -152,17 +155,49 @@ public sealed class ProcessTelemetry
         }
 
         var meters = await _meters.GetByOwnerAsync(property.OwnerId, ct);
-        double monthTotal = 0;
-        foreach (var meter in meters)
+        var exceeded = false;
+        string messageText;
+
+        if (limit.Unit == LimitUnit.Kwh)
         {
-            var st = await _status.GetByMeterAsync(meter.Id, ct);
-            if (st is not null)
+            double monthTotal = 0;
+            foreach (var meter in meters)
             {
-                monthTotal += st.MonthConsumptionKwh;
+                var st = await _status.GetByMeterAsync(meter.Id, ct);
+                if (st is not null)
+                {
+                    monthTotal += st.MonthConsumptionKwh;
+                }
             }
+
+            exceeded = monthTotal > (double)limit.Value;
+            messageText = $"Prekoracili ste limit potrosnje: {monthTotal:F1} kWh od {limit.Value:F0} kWh u mesecu {month}.";
+        }
+        else
+        {
+            var tariff = await _tariffs.GetActiveAsync(ct);
+            if (tariff is null)
+            {
+                return;
+            }
+
+            var monthStart = new DateTime(t.ObservationTime.Year, t.ObservationTime.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var monthEnd = t.ObservationTime.AddTicks(1);
+            decimal monthTotal = 0;
+            foreach (var meter in meters)
+            {
+                var readings = await _telemetry.GetForPeriodAsync(meter.Id, monthStart, monthEnd, ct);
+                var previous = await _telemetry.GetPreviousBeforeAsync(meter.Id, monthStart, ct);
+                var consumption = BillingCalculator.CalculateConsumption(readings, previous);
+                var breakdown = BillingCalculator.CalculateInvoice(consumption, meter, tariff);
+                monthTotal += breakdown.TotalAmountRsd;
+            }
+
+            exceeded = monthTotal > limit.Value;
+            messageText = $"Prekoracili ste limit potrosnje: {monthTotal:F2} RSD od {limit.Value:F2} RSD u mesecu {month}.";
         }
 
-        if (monthTotal > (double)limit.Value)
+        if (exceeded)
         {
             await _alerts.EnqueueAsync(new AlertMessage
             {
@@ -172,7 +207,7 @@ public sealed class ProcessTelemetry
                 ConsumerUserId = property.OwnerId.Value,
                 MeterId = message.MeterId,
                 SerialNumber = message.SerialNumber,
-                Message = $"Прекорачили сте лимит потрошње: {monthTotal:F1} kWh од {limit.Value:F0} kWh у месецу {month}.",
+                Message = messageText,
                 OccurredAtUtc = DateTime.UtcNow,
             }, ct);
 
