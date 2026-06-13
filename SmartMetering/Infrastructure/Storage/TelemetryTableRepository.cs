@@ -42,4 +42,41 @@ public sealed class TelemetryTableRepository : ITelemetryRepository
 
         return results;
     }
+
+    public async Task<IReadOnlyList<Telemetry>> GetForPeriodAsync(EntityId meterId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default)
+    {
+        var results = new List<Telemetry>();
+        var partition = meterId.ToString();
+        var from = new DateTimeOffset(DateTime.SpecifyKind(fromUtc, DateTimeKind.Utc));
+        var to = new DateTimeOffset(DateTime.SpecifyKind(toUtc, DateTimeKind.Utc));
+
+        var query = _table.QueryAsync<TelemetryEntity>(
+            e => e.PartitionKey == partition && e.ObservationTime >= from && e.ObservationTime < to,
+            cancellationToken: ct);
+
+        await foreach (var entity in query)
+        {
+            results.Add(TelemetryMapper.ToDomain(entity));
+        }
+
+        return results.OrderBy(t => t.ObservationTime).ToList();
+    }
+
+    public async Task<Telemetry?> GetPreviousBeforeAsync(EntityId meterId, DateTime beforeUtc, CancellationToken ct = default)
+    {
+        var partition = meterId.ToString();
+        var before = new DateTimeOffset(DateTime.SpecifyKind(beforeUtc, DateTimeKind.Utc));
+
+        var query = _table.QueryAsync<TelemetryEntity>(
+            e => e.PartitionKey == partition && e.ObservationTime < before,
+            maxPerPage: 1,
+            cancellationToken: ct);
+
+        await foreach (var entity in query)
+        {
+            return TelemetryMapper.ToDomain(entity);
+        }
+
+        return null;
+    }
 }
