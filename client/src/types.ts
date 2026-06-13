@@ -76,3 +76,53 @@ export interface SetLimitRequest {
   value: number;
   unit: number;
 }
+
+export interface TariffModel {
+  id: string;
+  name: string;
+  greenLimitKwh: number;
+  blueLimitKwh: number;
+  greenHighPriceRsd: number;
+  greenLowPriceRsd: number;
+  blueHighPriceRsd: number;
+  blueLowPriceRsd: number;
+  redHighPriceRsd: number;
+  redLowPriceRsd: number;
+  powerPriceRsdPerKw: number;
+  supplierFeeRsd: number;
+  isActive: boolean;
+  createdAtUtc: string;
+  activatedAtUtc?: string | null;
+}
+
+export interface Invoice {
+  id: string;
+  propertyId: string;
+  meterId: string;
+  serialNumber: string;
+  year: number;
+  month: number;
+  issuedAtUtc: string;
+  highTariffKwh: number;
+  lowTariffKwh: number;
+  greenKwh: number;
+  blueKwh: number;
+  redKwh: number;
+  totalKwh: number;
+  totalAmountRsd: number;
+  status: number;
+}
+
+export interface InvoicePage {
+  items: Invoice[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+}
+
+export interface GeneratedInvoices {
+  year: number;
+  month: number;
+  created: number;
+  skipped: number;
+}

@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthContext';
 import { useTelemetryHub } from '../hooks/useTelemetryHub';
 import { TariffBarChart, VoltageLoadChart } from '../components/Charts';
 import { LimitPanel } from '../components/LimitPanel';
+import { InvoicePanel } from '../components/InvoicePanel';
+import { BillingAdminPage } from './BillingAdminPage';
 import type { Meter, MeterLiveUpdate, MeterStatus, Property, TelemetryPoint } from '../types';
 import { TariffLabel } from '../types';
 
@@ -38,6 +40,11 @@ const fromUpdate = (u: MeterLiveUpdate): LiveView => ({
 });
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  return user?.role === 'Consumer' ? <ConsumerDashboard /> : <BillingAdminPage />;
+}
+
+function ConsumerDashboard() {
   const { user, logout } = useAuth();
   const [properties, setProperties] = useState<Property[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -136,6 +143,7 @@ export function DashboardPage() {
             <TariffBarChart points={points} />
           </section>
           {user?.role === 'Consumer' && <LimitPanel />}
+          <InvoicePanel propertyId={activeId} />
         </main>
       ) : (
         <p className="muted pad">Додајте објекат да бисте почели.</p>
