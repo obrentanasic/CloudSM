@@ -33,7 +33,7 @@ EF Core + Azure SQL, Azure Table/Queue/Blob Storage, SignalR, JWT, SendGrid, Rea
 
 ---
 
-## Šta je urađeno (Faze 1–6)
+## Šta je urađeno (Faze 1–7)
 
 | Faza | Opis | Status |
 |------|------|--------|
@@ -43,6 +43,7 @@ EF Core + Azure SQL, Azure Table/Queue/Blob Storage, SignalR, JWT, SendGrid, Rea
 | 4 | Prikupljanje telemetrije: konzolni simulator, Functions (handshake + prijem + obrada), Table Storage, `telemetry-queue`, klasifikacija tarife (VT/NT) | ✅ |
 | 5 | Real-time: SignalR hub, `MeterStatusWorker`, `meterstatus-queue`, analitički REST endpointi, **React dashboard** (tabovi, kartice, grafikoni) | ✅ |
 | 6 | Anomalije i notifikacije: detekcija pada napona / skoka potrošnje / offline brojila, limit potrošnje (kWh), `alert-queue` + `ProcessAlerts` (mejl), `MeterMonitor` (timer), panel za limit u dashboardu | ✅ |
+| 7 | Tarifni modeli i automatizovan mesečni obračun: aktivan tarifni model (zelena/plava/crvena zona), `MonthlyBilling` timer, tekstualni i PDF računi u Blob Storage, mejl obaveštenje, digitalni karton računa u dashboardu | ✅ |
 
 ### Funkcionalni zahtevi po poenima
 
@@ -53,30 +54,27 @@ EF Core + Azure SQL, Azure Table/Queue/Blob Storage, SignalR, JWT, SendGrid, Rea
 | Uparivanje sa IoT uređajima (registracija + handshake + token) | 6 | ✅ |
 | Telemetrija i analitika (grafikoni VT/NT, napon/opterećenje, kartice) | 6 | ✅ |
 | Hitna upozorenja (pad napona / nagli skok / offline) | 6 | ✅ |
-| Limit potrošnje (kWh; RSD u Fazi 7) | 6 | ✅ |
-| Upravljanje tarifnim modelima | 3 | ⏳ preostaje (Faza 7) |
-| Automatizovan mesečni obračun + računi | 6 | ⏳ preostaje (Faza 7) |
-| Digitalni karton potrošnje (+ PDF) | 3 | ⏳ preostaje (Faza 7) |
+| Limit potrošnje (kWh i RSD) | 6 | ✅ |
+| Upravljanje tarifnim modelima | 3 | ✅ |
+| Automatizovan mesečni obračun + računi | 6 | ✅ |
+| Digitalni karton potrošnje (+ PDF) | 3 | ✅ |
 | Online plaćanje (Stripe) | 6 | ⏳ preostaje (Faza 8) |
 | Prijava stanja brojila (slika + odobravanje) | 4 | ⏳ preostaje (Faza 9) |
 | Pregled statusa / nadzor mreže (admin) | 12 | ⏳ preostaje (Faza 10) |
 
 ---
 
-## Šta preostaje (Faze 7–10)
+## Šta preostaje (Faze 8–10)
 
-- **Faza 7 — Obračun i računi:** admin definiše tarifne modele (zone: zelena/plava/crvena),
-  vremenski okidač prvog u mesecu računa po formuli iz specifikacije → tekstualni račun u Blob + mejl;
-  digitalni karton sa izvozom u PDF. (Ovde se uvodi i RSD limit potrošnje.)
 - **Faza 8 — Plaćanje (Stripe):** Checkout sesija + Webhook funkcija koja označava račun kao plaćen.
 - **Faza 9 — Ručni unos stanja:** forma + slika u Blob, Blob-trigger za optimizaciju slike,
   odobravanje od strane administratora naplate.
 - **Faza 10 — Admin dashboard + deploy:** tabela statusa brojila (online/offline), pregled uplata,
   statistika poslatih računa, **pregled upozorenja**; objavljivanje svih komponenti na Azure.
 
-**Procena:** funkcionalno je urađeno otprilike **45–50%** poena iz specifikacije, a
+**Procena:** funkcionalno je urađeno otprilike **60–65%** poena iz specifikacije, a
 **kompletna infrastruktura** (cloud, Functions, storage, queue, SignalR, auth, React) je gotova,
-pa preostale funkcionalnosti dolaze brže jer se nadograđuju na postojeće obrasce. Po fazama: **6 od 10**.
+pa preostale funkcionalnosti dolaze brže jer se nadograđuju na postojeće obrasce. Po fazama: **7 od 10**.
 
 > Napomena: upozorenja se za sada **ne prikazuju u aplikaciji** (ekran za upozorenja dolazi u Fazi 10).
 > Vide se u: konzoli gde radi `func start` (logovi), redu `alert-queue` (Storage Explorer) i kao
@@ -153,7 +151,9 @@ koji je postavio Azure resurse, ili upišite svoje.
   }
 }
 ```
-> `SendGrid*` ključevi su potrebni `ProcessAlerts` funkciji za slanje mejlova upozorenja.
+> `SendGrid*` ključevi su potrebni `ProcessAlerts` funkciji za slanje mejlova upozorenja i
+> `MonthlyBilling` funkciji za slanje obaveštenja o novim računima. Računi se čuvaju u Blob
+> container-u `invoices`, koji aplikacija kreira automatski.
 
 ### 3) `client/.env`
 ```
@@ -211,6 +211,24 @@ Otvori **http://localhost:5173**.
 2. Pokreni **Functions** i **Simulator** (sa tim serijskim brojem).
 3. Na dashboardu izaberi tab objekta → kartica brojila i grafikoni se ažuriraju **uživo** (SignalR).
 
+### Obračun i računi (Faza 7)
+1. Prijavi se kao **administrator** (`admin@smartmetering.com` / `Admin123!`).
+2. Na admin ekranu kreiraj i aktiviraj tarifni model. Standardni pragovi iz specifikacije su:
+   zelena zona do `350 kWh`, plava zona do `1200 kWh`, crvena zona preko `1200 kWh`.
+3. Prijavi se kao **potrošač**, napravi objekat i upari brojilo, zatim pusti simulator da napravi telemetriju.
+4. Za test bez čekanja prvog u mesecu, vrati se kao administrator i u panelu **Ručni obračun**
+   izaberi godinu/mesec i klikni **Generiši račune**.
+5. Kao potrošač, u izabranom objektu otvori **Digitalni karton računa**. Tu se vide računi
+   od najnovijeg ka najstarijem, potrošnja po VT/NT i zonama, status i dugme za PDF.
+
+Automatski obračun radi u Azure Functions projektu preko timer funkcije `MonthlyBilling`.
+Cron izraz je `0 0 2 1 * *`, što znači da prvog dana u mesecu u 02:00 UTC generiše račune
+za prethodni mesec. Funkcija prolazi kroz sva **uparena** brojila, primenjuje aktivni tarifni
+model, čuva `.txt` i `.pdf` račun u Blob Storage i šalje mejl potrošaču ako je SendGrid podešen.
+
+Ako nema aktivnog tarifnog modela, obračun se preskače i u logu Functions procesa vidi se
+upozorenje. RSD limit potrošnje koristi isti aktivni tarifni model; kWh limit radi i bez tarife.
+
 > Napomena: Azure SQL Free (serverless) se „uspava" kad nije u upotrebi — prvi zahtev nakon pauze
 > može potrajati ~30–60 s dok se baza ne probudi (aplikacija automatski ponavlja pokušaj).
 
@@ -223,7 +241,7 @@ SmartMetering/
 ├── Domain/          # entiteti, agregati, vrednosni objekti, enumeracije
 ├── Application/     # interfejsi (repozitorijumi/servisi), servisi, DTO-ovi
 ├── Infrastructure/  # EF Core, Table/Queue/Blob repozitorijumi, JWT, SendGrid, mapiranja
-├── Functions/       # Azure Functions (RegisterDevice, ReceiveTelemetry, ProcessTelemetry, MeterMonitor, ProcessAlerts)
+├── Functions/       # Azure Functions (RegisterDevice, ReceiveTelemetry, ProcessTelemetry, MeterMonitor, ProcessAlerts, MonthlyBilling)
 ├── WebApi/          # REST kontroleri, SignalR hub, background worker, autentifikacija
 └── Simulator/       # konzolna aplikacija — simulator pametnog brojila
 client/              # React + Vite + TypeScript dashboard
