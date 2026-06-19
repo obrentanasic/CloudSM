@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SmartMetering.Application.Abstractions;
 using SmartMetering.Application.Common;
+using SmartMetering.Application.Payments;
 using SmartMetering.Infrastructure.Email;
+using SmartMetering.Infrastructure.Payments;
 using SmartMetering.Infrastructure.Persistence;
 using SmartMetering.Infrastructure.Persistence.Repositories;
 using SmartMetering.Infrastructure.Security;
@@ -66,6 +68,14 @@ public static class DependencyInjection
     {
         services.AddSingleton(sendGridOptions);
         services.AddSingleton<IEmailService, SendGridEmailService>();
+        return services;
+    }
+
+    public static IServiceCollection AddStripe(this IServiceCollection services, StripeOptions stripeOptions)
+    {
+        services.AddSingleton(stripeOptions);
+        services.AddSingleton<IStripeGateway, StripeGateway>();
+        services.AddScoped<IPaymentService, PaymentService>();
         return services;
     }
 }

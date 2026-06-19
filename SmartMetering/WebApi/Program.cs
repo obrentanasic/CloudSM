@@ -6,6 +6,7 @@ using SmartMetering.Application;
 using SmartMetering.Application.Authentication;
 using SmartMetering.Infrastructure;
 using SmartMetering.Infrastructure.Email;
+using SmartMetering.Infrastructure.Payments;
 using SmartMetering.Infrastructure.Persistence;
 using SmartMetering.Infrastructure.Security;
 using SmartMetering.WebApi.BackgroundServices;
@@ -22,6 +23,7 @@ var storageConnectionString = config["StorageConnectionString"]
 
 var jwtOptions = config.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 var sendGridOptions = config.GetSection(SendGridOptions.SectionName).Get<SendGridOptions>() ?? new SendGridOptions();
+var stripeOptions = config.GetSection(StripeOptions.SectionName).Get<StripeOptions>() ?? new StripeOptions();
 var authLinks = config.GetSection("AuthLinks").Get<AuthLinkOptions>() ?? new AuthLinkOptions();
 
 builder.Services
@@ -29,7 +31,8 @@ builder.Services
     .AddStorage(storageConnectionString)
     .AddSerialization()
     .AddSecurity(jwtOptions)
-    .AddEmail(sendGridOptions);
+    .AddEmail(sendGridOptions)
+    .AddStripe(stripeOptions);
 builder.Services.AddApplication();
 builder.Services.AddSingleton(authLinks);
 builder.Services.AddHostedService<MeterStatusWorker>();
