@@ -195,3 +195,26 @@ button:disabled { opacity: 0.6; }
   .invoice-metrics { grid-template-columns: 1fr; }
   .reading-row { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Stripe payment button ─────────────────────────────────────── */
+.btn-pay {
+  display: inline-block;
+  padding: 0.35rem 0.9rem;
+  background: #635bff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-pay:hover:not(:disabled) { background: #4f46e5; }
+.btn-pay:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.invoice-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}

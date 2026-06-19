@@ -3,14 +3,19 @@ import { API_BASE, getToken } from '../api/client';
 import { api } from '../api/client';
 import type { InvoicePage, TelemetryHistory } from '../types';
 import { TariffLabel } from '../types';
-
+ 
 const money = (value: number) => value.toLocaleString('sr-Latn', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const kwh = (value: number) => value.toLocaleString('sr-Latn', { maximumFractionDigits: 3 });
-
+ 
 function toInputDate(value: Date) {
   return value.toISOString().slice(0, 10);
 }
-
+ 
+interface CheckoutSessionDto {
+  sessionId: string;
+  url: string;
+}
+ 
 export function InvoicePanel({ propertyId, meterId }: { propertyId: string; meterId: string | null }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<InvoicePage | null>(null);
@@ -22,17 +27,18 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
   });
   const [to, setTo] = useState(() => toInputDate(new Date()));
   const [error, setError] = useState<string | null>(null);
-
+  const [payingId, setPayingId] = useState<string | null>(null);
+ 
   useEffect(() => {
     setPage(1);
   }, [propertyId, meterId, from, to]);
-
+ 
   useEffect(() => {
     if (!meterId || !from || !to) {
       setData(null);
       return;
     }
-
+ 
     let cancelled = false;
     const fromIso = new Date(`${from}T00:00:00.000Z`).toISOString();
     const toIso = new Date(`${to}T23:59:59.999Z`).toISOString();
@@ -43,7 +49,7 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
       from: fromIso,
       to: toIso,
     });
-
+ 
     api.get<InvoicePage>(`/api/billing/properties/${propertyId}/invoices?${params.toString()}`)
       .then((response) => {
         if (!cancelled) {
@@ -54,17 +60,17 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
       .catch((err) => { if (!cancelled) setError((err as Error).message); });
     return () => { cancelled = true; };
   }, [propertyId, meterId, page, from, to]);
-
+ 
   useEffect(() => {
     if (!meterId) {
       setHistory(null);
       return;
     }
-
+ 
     if (!from || !to) {
       return;
     }
-
+ 
     let cancelled = false;
     const fromIso = new Date(`${from}T00:00:00.000Z`).toISOString();
     const toIso = new Date(`${to}T23:59:59.999Z`).toISOString();
@@ -78,19 +84,19 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
       .catch((err) => { if (!cancelled) setError((err as Error).message); });
     return () => { cancelled = true; };
   }, [meterId, from, to]);
-
+ 
   async function downloadPdf(id: string) {
     setError(null);
     const token = getToken();
     const res = await fetch(`${API_BASE}/api/billing/invoices/${id}/pdf`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
-
+ 
     if (!res.ok) {
       setError(`PDF није доступан (HTTP ${res.status}).`);
       return;
     }
-
+ 
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -99,9 +105,25 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
     link.click();
     URL.revokeObjectURL(url);
   }
-
+ 
+  async function handlePay(invoiceId: string) {
+    setError(null);
+    setPayingId(invoiceId);
+    try {
+      const session = await api.post<CheckoutSessionDto>(
+        `/api/billing/invoices/${invoiceId}/checkout-session`,
+        {}
+      );
+      // Redirect to Stripe Checkout
+      window.location.href = session.url;
+    } catch (err) {
+      setError((err as Error).message);
+      setPayingId(null);
+    }
+  }
+ 
   const totalPages = data ? Math.max(1, Math.ceil(data.totalCount / data.pageSize)) : 1;
-
+ 
   return (
     <section className="invoice-panel card">
       <div className="row between">
@@ -109,7 +131,7 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
         {data && data.totalCount > 0 && <span className="muted small">{data.totalCount} укупно</span>}
       </div>
       {error && <div className="error">{error}</div>}
-
+ 
       <div className="history-filter">
         <label>
           Од
@@ -121,7 +143,7 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
         </label>
         {history && <span className="muted small">{history.serialNumber} · {history.points.length} очитавања</span>}
       </div>
-
+ 
       {meterId && history && history.points.length > 0 && (
         <div className="reading-list">
           {history.points.map((point) => (
@@ -135,13 +157,13 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
           ))}
         </div>
       )}
-
+ 
       {meterId && history && history.points.length === 0 && (
         <p className="muted small">Нема очитавања за изабрани период.</p>
       )}
-
+ 
       {!meterId && <p className="muted small">Изаберите бројило да видите очитавања.</p>}
-
+ 
       {meterId && data && data.items.length > 0 ? (
         <>
           <div className="invoice-list">
@@ -162,7 +184,18 @@ export function InvoicePanel({ propertyId, meterId }: { propertyId: string; mete
                     {invoice.status === 1 ? 'Плаћен' : 'Неплаћен'}
                   </span>
                 </div>
-                <button className="link" onClick={() => downloadPdf(invoice.id)}>PDF</button>
+                <div className="invoice-actions">
+                  <button className="link" onClick={() => downloadPdf(invoice.id)}>PDF</button>
+                  {invoice.status === 0 && (
+                    <button
+                      className="btn-pay"
+                      disabled={payingId === invoice.id}
+                      onClick={() => handlePay(invoice.id)}
+                    >
+                      {payingId === invoice.id ? 'Учитавање...' : 'Плати'}
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
