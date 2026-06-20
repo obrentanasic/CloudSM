@@ -211,3 +211,34 @@ export const AlertTypeLabel = (t: number) =>
   (['Пад напона', 'Бројило offline', 'Нагли скок потрошње', 'Прекорачен лимит'][t] ?? 'Упозорење');
 
 export const AlertSeverityLabel = (s: number) => (s === 1 ? 'Критично' : 'Упозорење');
+
+// ── Admin user management ────────────────────────────────────────
+export interface UserAccount {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  role: Role;
+  status: 'PendingActivation' | 'Active' | 'Suspended';
+  createdAtUtc: string;
+}
+
+export const UserRoleLabel = (r: Role) =>
+  r === 'Admin' ? 'Администратор' : r === 'BillingAdmin' ? 'Администратор наплате' : 'Потрошач';
+
+export const UserStatusLabel = (s: UserAccount['status']) => {
+  switch (s) {
+    case 'Active': return 'Активан';
+    case 'Suspended': return 'Суспендован';
+    default: return 'Чека активацију';
+  }
+};
+
+export interface CreateUserRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  role: number; // 0 = Admin, 1 = Consumer, 2 = BillingAdmin
+}

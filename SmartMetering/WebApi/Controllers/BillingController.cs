@@ -2,8 +2,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SmartMetering.Application.Billing;
 using SmartMetering.Application.Payments;
-using SmartMetering.Infrastructure.Payments;
-using Stripe;
 
 namespace SmartMetering.WebApi.Controllers;
 
@@ -12,13 +10,11 @@ public sealed class BillingController : ApiControllerBase
 {
     private readonly IBillingService _billing;
     private readonly IPaymentService _payment;
-    private readonly StripeOptions _stripeOptions;
 
-    public BillingController(IBillingService billing, IPaymentService payment, StripeOptions stripeOptions)
+    public BillingController(IBillingService billing, IPaymentService payment)
     {
         _billing = billing;
         _payment = payment;
-        _stripeOptions = stripeOptions;
     }
 
     [HttpGet("tariffs")]
@@ -92,39 +88,6 @@ public sealed class BillingController : ApiControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Stripe Webhook endpoint — called by Stripe after a successful payment.
-    /// Must NOT be protected by JWT (Stripe doesn't send auth tokens).
-    /// Security is enforced via the Stripe-Signature header.
-    /// </summary>
-    [HttpPost("stripe-webhook")]
-    [AllowAnonymous]
-    public async Task<IActionResult> StripeWebhook(CancellationToken ct)
-    {
-        var json = await new StreamReader(HttpContext.Request.Body).ReadToEndAsync(ct);
-
-        try
-        {
-            var stripeEvent = EventUtility.ConstructEvent(
-                json,
-                Request.Headers["Stripe-Signature"],
-                _stripeOptions.WebhookSecret,
-                throwOnApiVersionMismatch: false);
-
-            if (stripeEvent.Type == EventTypes.CheckoutSessionCompleted)
-            {
-                var session = stripeEvent.Data.Object as Stripe.Checkout.Session;
-                if (session is not null)
-                {
-                    await _payment.MarkInvoicePaidAsync(session.Id, ct);
-                }
-            }
-
-            return Ok();
-        }
-        catch (StripeException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
-    }
+    // Payment confirmation is handled out-of-band by the StripeWebhook Azure Function,
+    // which verifies the Stripe-Signature and marks the invoice Paid.
 }

@@ -1,5 +1,6 @@
 using SmartMetering.Application.Abstractions;
 using SmartMetering.Application.Common;
+using SmartMetering.Domain.Common;
 using SmartMetering.Domain.Users;
 
 namespace SmartMetering.Application.Authentication;
@@ -10,6 +11,7 @@ public sealed class AuthService : IAuthService
     private static readonly TimeSpan ResetTokenLifetime = TimeSpan.FromHours(1);
 
     private readonly IUserRepository _users;
+    private readonly IPropertyRepository _properties;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwt;
     private readonly IEmailService _email;
@@ -17,12 +19,14 @@ public sealed class AuthService : IAuthService
 
     public AuthService(
         IUserRepository users,
+        IPropertyRepository properties,
         IPasswordHasher passwordHasher,
         IJwtTokenGenerator jwt,
         IEmailService email,
         AuthLinkOptions links)
     {
         _users = users;
+        _properties = properties;
         _passwordHasher = passwordHasher;
         _jwt = jwt;
         _email = email;
@@ -117,4 +121,62 @@ public sealed class AuthService : IAuthService
         user.SetPassword(_passwordHasher.Hash(request.NewPassword));
         await _users.SaveChangesAsync(ct);
     }
+
+    // ── Admin user management ────────────────────────────────────────────────
+
+    public async Task<IReadOnlyList<UserDto>> GetUsersAsync(CancellationToken ct = default)
+    {
+        var users = await _users.GetAllAsync(ct);
+        return users.Select(Map).ToList();
+    }
+
+    public async Task SuspendUserAsync(Guid actingUserId, Guid userId, CancellationToken ct = default)
+    {
+        if (actingUserId == userId)
+        {
+            throw new AppException("Не можете суспендовати сопствени налог.");
+        }
+
+        var user = await _users.GetByIdAsync(EntityId.From(userId), ct)
+            ?? throw new NotFoundException("Корисник није пронађен.");
+
+        user.Suspend();
+        await _users.SaveChangesAsync(ct);
+    }
+
+    public async Task ReactivateUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await _users.GetByIdAsync(EntityId.From(userId), ct)
+            ?? throw new NotFoundException("Корисник није пронађен.");
+
+        user.Reactivate();
+        await _users.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteUserAsync(Guid actingUserId, Guid userId, CancellationToken ct = default)
+    {
+        if (actingUserId == userId)
+        {
+            throw new AppException("Не можете обрисати сопствени налог.");
+        }
+
+        var user = await _users.GetByIdAsync(EntityId.From(userId), ct)
+            ?? throw new NotFoundException("Корисник није пронађен.");
+
+        // Invoices and manual readings carry a Restrict FK to the user, so a consumer with any
+        // history can't be hard-deleted. Properties are the root of that tree — if the user owns
+        // any, block the delete and steer the admin to suspension instead of orphaning records.
+        var properties = await _properties.GetByOwnerAsync(user.Id, ct);
+        if (properties.Count > 0)
+        {
+            throw new ConflictException(
+                "Корисник има повезане објекте, рачуне или очитавања и не може бити обрисан. Суспендујте налог уместо тога.");
+        }
+
+        _users.Remove(user);
+        await _users.SaveChangesAsync(ct);
+    }
+
+    private static UserDto Map(User u) =>
+        new(u.Id.Value, u.FirstName, u.LastName, u.Email, u.PhoneNumber, u.Role.ToString(), u.Status.ToString(), u.CreatedAtUtc);
 }

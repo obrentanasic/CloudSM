@@ -11,4 +11,13 @@ public interface IAuthService
     Task ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken ct = default);
 
     Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken ct = default);
+
+    // ── Admin user management ────────────────────────────────────────────────
+    Task<IReadOnlyList<UserDto>> GetUsersAsync(CancellationToken ct = default);
+
+    Task SuspendUserAsync(Guid actingUserId, Guid userId, CancellationToken ct = default);
+
+    Task ReactivateUserAsync(Guid userId, CancellationToken ct = default);
+
+    Task DeleteUserAsync(Guid actingUserId, Guid userId, CancellationToken ct = default);
 }

@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { AuthImage } from '../components/AuthImage';
 import { NetworkOverviewPanel } from '../components/NetworkOverviewPanel';
+import { UserManagementPanel } from '../components/UserManagementPanel';
 import type { GeneratedInvoices, ManualReadingDto, TariffModel } from '../types';
 
 const defaults = {
@@ -27,7 +28,8 @@ export function BillingAdminPage() {
   const [result, setResult] = useState<GeneratedInvoices | null>(null);
   const [pendingReadings, setPendingReadings] = useState<ManualReadingDto[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
-  const [view, setView] = useState<'billing' | 'network'>('billing');
+  const [view, setView] = useState<'billing' | 'network' | 'users'>('billing');
+  const isAdmin = user?.role === 'Admin';
 
   const previousMonth = useMemo(() => {
     const d = new Date();
@@ -132,9 +134,14 @@ export function BillingAdminPage() {
       <div className="tabs">
         <button className={view === 'billing' ? 'tab active' : 'tab'} onClick={() => setView('billing')}>Наплата</button>
         <button className={view === 'network' ? 'tab active' : 'tab'} onClick={() => setView('network')}>Мрежа и упозорења</button>
+        {isAdmin && (
+          <button className={view === 'users' ? 'tab active' : 'tab'} onClick={() => setView('users')}>Корисници</button>
+        )}
       </div>
 
-      {view === 'network' ? (
+      {view === 'users' && isAdmin ? (
+        <UserManagementPanel />
+      ) : view === 'network' ? (
         <main className="content">
           <NetworkOverviewPanel />
         </main>

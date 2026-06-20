@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using SmartMetering.Application;
 using SmartMetering.Infrastructure;
 using SmartMetering.Infrastructure.Email;
+using SmartMetering.Infrastructure.Payments;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
@@ -22,11 +23,18 @@ var sendGridOptions = new SendGridOptions
     FromName = config["SendGridFromName"] ?? "Smart Metering",
 };
 
+var stripeOptions = new StripeOptions
+{
+    SecretKey = config["StripeSecretKey"] ?? string.Empty,
+    WebhookSecret = config["StripeWebhookSecret"] ?? string.Empty,
+};
+
 builder.Services
     .AddPersistence(sqlConnectionString)
     .AddStorage(storageConnectionString)
     .AddSerialization()
-    .AddEmail(sendGridOptions);
+    .AddEmail(sendGridOptions)
+    .AddStripe(stripeOptions);
 builder.Services.AddApplication();
 
 builder.Build().Run();

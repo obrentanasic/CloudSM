@@ -33,7 +33,7 @@ EF Core + Azure SQL, Azure Table/Queue/Blob Storage, SignalR, JWT, SendGrid, Rea
 
 ---
 
-## Šta je urađeno (Faze 1–7)
+## Šta je urađeno (Faze 1–10)
 
 | Faza | Opis | Status |
 |------|------|--------|
@@ -44,6 +44,9 @@ EF Core + Azure SQL, Azure Table/Queue/Blob Storage, SignalR, JWT, SendGrid, Rea
 | 5 | Real-time: SignalR hub, `MeterStatusWorker`, `meterstatus-queue`, analitički REST endpointi, **React dashboard** (tabovi, kartice, grafikoni) | ✅ |
 | 6 | Anomalije i notifikacije: detekcija pada napona / skoka potrošnje / offline brojila, limit potrošnje (kWh), `alert-queue` + `ProcessAlerts` (mejl), `MeterMonitor` (timer), panel za limit u dashboardu | ✅ |
 | 7 | Tarifni modeli i automatizovan mesečni obračun: aktivan tarifni model (zelena/plava/crvena zona), `MonthlyBilling` timer, tekstualni i PDF računi u Blob Storage, mejl obaveštenje, digitalni karton računa u dashboardu | ✅ |
+| 8 | Online plaćanje (Stripe): Checkout sesija (`/api/billing/invoices/{id}/checkout-session`) + **`StripeWebhook` Azure funkcija** koja na potvrđeno plaćanje označava račun kao plaćen | ✅ |
+| 9 | Ručni unos stanja brojila: forma + slika u Blob, `OptimizeReadingImage` (Blob-trigger) za optimizaciju slike, odobravanje/odbijanje od strane administratora naplate (odobreni unos ulazi u obračun) | ✅ |
+| 10 | Admin nadzor mreže: tabela statusa brojila (online/offline), pregled uplata, statistika računa (poslato mejlom), **pregled upozorenja**, te **upravljanje korisnicima** (kreiranje / suspenzija / brisanje) | ✅ |
 
 ### Funkcionalni zahtevi po poenima
 
@@ -58,27 +61,26 @@ EF Core + Azure SQL, Azure Table/Queue/Blob Storage, SignalR, JWT, SendGrid, Rea
 | Upravljanje tarifnim modelima | 3 | ✅ |
 | Automatizovan mesečni obračun + računi | 6 | ✅ |
 | Digitalni karton potrošnje (+ PDF) | 3 | ✅ |
-| Online plaćanje (Stripe) | 6 | ⏳ preostaje (Faza 8) |
-| Prijava stanja brojila (slika + odobravanje) | 4 | ⏳ preostaje (Faza 9) |
-| Pregled statusa / nadzor mreže (admin) | 12 | ⏳ preostaje (Faza 10) |
+| Online plaćanje (Stripe Checkout + Webhook funkcija) | 6 | ✅ |
+| Prijava stanja brojila (slika + odobravanje) | 4 | ✅ |
+| Pregled statusa / nadzor mreže (admin) | 12 | ✅ |
+| Upravljanje korisničkim nalozima (kreiranje / suspenzija / brisanje) | — | ✅ |
 
 ---
 
-## Šta preostaje (Faze 8–10)
+## Status
 
-- **Faza 8 — Plaćanje (Stripe):** Checkout sesija + Webhook funkcija koja označava račun kao plaćen.
-- **Faza 9 — Ručni unos stanja:** forma + slika u Blob, Blob-trigger za optimizaciju slike,
-  odobravanje od strane administratora naplate.
-- **Faza 10 — Admin dashboard + deploy:** tabela statusa brojila (online/offline), pregled uplata,
-  statistika poslatih računa, **pregled upozorenja**; objavljivanje svih komponenti na Azure.
+Sve faze (1–10) su završene; svi funkcionalni zahtevi iz specifikacije su pokriveni, uključujući
+**Stripe plaćanje** (Webhook je realizovan kao Azure funkcija, u skladu sa specifikacijom),
+**ručni unos stanja** sa odobravanjem, **admin nadzor mreže** i **upravljanje korisnicima**.
 
-**Procena:** funkcionalno je urađeno otprilike **60–65%** poena iz specifikacije, a
-**kompletna infrastruktura** (cloud, Functions, storage, queue, SignalR, auth, React) je gotova,
-pa preostale funkcionalnosti dolaze brže jer se nadograđuju na postojeće obrasce. Po fazama: **7 od 10**.
+Preostaje samo **objavljivanje (deploy) na Azure** (Function App + App Service); kompletna
+infrastruktura (cloud, Functions, storage, queue, blob, SignalR, auth, React) i sva poslovna
+logika su gotovi.
 
-> Napomena: upozorenja se za sada **ne prikazuju u aplikaciji** (ekran za upozorenja dolazi u Fazi 10).
-> Vide se u: konzoli gde radi `func start` (logovi), redu `alert-queue` (Storage Explorer) i kao
-> e-mail (SendGrid) — pod uslovom da je primalac prava adresa (nalozi na `@smartmetering.com` se odbacuju).
+> Upozorenja se prikazuju u admin panelu (tab **„Мрежа и упозорења"**), a osim toga su vidljiva i u
+> logovima `func start`, redu `alert-queue` (Storage Explorer) i kao e-mail (SendGrid) — pod uslovom
+> da je primalac prava adresa (nalozi na `@smartmetering.com` se odbacuju).
 
 ---
 
@@ -125,6 +127,12 @@ koji je postavio Azure resurse, ili upišite svoje.
     "FromEmail": "<verifikovani-posiljalac@example.com>",
     "FromName": "Smart Metering"
   },
+  "Stripe": {
+    "SecretKey": "sk_test_<stripe-sandbox-secret>",
+    "WebhookSecret": "whsec_<stripe-webhook-signing-secret>",
+    "SuccessUrl": "http://localhost:5173/payment-success",
+    "CancelUrl": "http://localhost:5173/payment-cancel"
+  },
   "AdminSeed": {
     "Email": "admin@smartmetering.com", "Password": "Admin123!",
     "FirstName": "System", "LastName": "Administrator", "PhoneNumber": "+381000000000"
@@ -147,6 +155,8 @@ koji je postavio Azure resurse, ili upišite svoje.
     "SendGridApiKey": "SG.<vas-sendgrid-kljuc>",
     "SendGridFromEmail": "<verifikovani-posiljalac@example.com>",
     "SendGridFromName": "Smart Metering",
+    "StripeSecretKey": "sk_test_<stripe-sandbox-secret>",
+    "StripeWebhookSecret": "whsec_<stripe-webhook-signing-secret>",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
   }
 }
@@ -154,6 +164,12 @@ koji je postavio Azure resurse, ili upišite svoje.
 > `SendGrid*` ključevi su potrebni `ProcessAlerts` funkciji za slanje mejlova upozorenja i
 > `MonthlyBilling` funkciji za slanje obaveštenja o novim računima. Računi se čuvaju u Blob
 > container-u `invoices`, koji aplikacija kreira automatski.
+>
+> `Stripe*` ključevi su potrebni `StripeWebhook` funkciji (potvrda plaćanja). Webhook je realizovan
+> kao Azure funkcija na ruti `POST /api/stripe-webhook` — u Stripe Dashboard-u podesi endpoint na
+> `https://<function-app>/api/stripe-webhook` (lokalno: `http://localhost:7071/api/stripe-webhook`,
+> npr. preko `stripe listen --forward-to`). Kreiranje Checkout sesije ostaje u Web API-ju, pa Web API
+> i dalje koristi `Stripe:SecretKey`.
 
 ### 3) `client/.env`
 ```
@@ -221,6 +237,24 @@ Otvori **http://localhost:5173**.
 5. Kao potrošač, u izabranom objektu otvori **Digitalni karton računa**. Tu se vide računi
    od najnovijeg ka najstarijem, potrošnja po VT/NT i zonama, status i dugme za PDF.
 
+### Upravljanje korisnicima (Faza 10, samo Administrator)
+Prijavi se kao **administrator** i otvori tab **Корисници**. Tu možeš da:
+- **kreiraš nalog** (ime, prezime, imejl, telefon, uloga) — sistem šalje aktivacioni mejl sa linkom
+  za postavljanje lozinke (nema javne registracije);
+- **suspenduješ / reaktiviraš** nalog (suspendovan korisnik ne može da se prijavi);
+- **obrišeš** nalog bez povezanih podataka. Korisnik koji ima objekte/račune/očitavanja ne može
+  da se obriše (FK `Restrict`) — umesto toga ga suspenduj.
+
+> Tab **Корисници** je vidljiv samo ulozi `Admin`; `BillingAdmin` vidi naplatu i nadzor mreže.
+
+### Plaćanje (Stripe, Faza 8)
+1. U `Stripe` sekciji podesi `SecretKey` (Web API) i `WebhookSecret` (Functions) iz Stripe **Sandbox**-a.
+2. Pokreni Web API i Functions, a webhook izloži Stripe-u (npr. `stripe listen --forward-to
+   http://localhost:7071/api/stripe-webhook`).
+3. Kao potrošač u **Digitalnom kartonu** klikni **Плати** na neplaćenom računu → Stripe Checkout.
+4. Po uspešnom plaćanju `StripeWebhook` Azure funkcija označava račun kao **Плаћен**
+   (vidljivo i u admin pregledu uplata).
+
 Automatski obračun radi u Azure Functions projektu preko timer funkcije `MonthlyBilling`.
 Cron izraz je `0 0 2 1 * *`, što znači da prvog dana u mesecu u 02:00 UTC generiše račune
 za prethodni mesec. Funkcija prolazi kroz sva **uparena** brojila, primenjuje aktivni tarifni
@@ -241,7 +275,7 @@ SmartMetering/
 ├── Domain/          # entiteti, agregati, vrednosni objekti, enumeracije
 ├── Application/     # interfejsi (repozitorijumi/servisi), servisi, DTO-ovi
 ├── Infrastructure/  # EF Core, Table/Queue/Blob repozitorijumi, JWT, SendGrid, mapiranja
-├── Functions/       # Azure Functions (RegisterDevice, ReceiveTelemetry, ProcessTelemetry, MeterMonitor, ProcessAlerts, MonthlyBilling)
+├── Functions/       # Azure Functions (RegisterDevice, ReceiveTelemetry, ProcessTelemetry, MeterMonitor, ProcessAlerts, MonthlyBilling, OptimizeReadingImage, StripeWebhook)
 ├── WebApi/          # REST kontroleri, SignalR hub, background worker, autentifikacija
 └── Simulator/       # konzolna aplikacija — simulator pametnog brojila
 client/              # React + Vite + TypeScript dashboard

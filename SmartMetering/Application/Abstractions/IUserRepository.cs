@@ -15,7 +15,12 @@ public interface IUserRepository
 
     Task<IReadOnlyList<User>> GetByRoleAsync(UserRole role, CancellationToken ct = default);
 
+    /// <summary>All users — for the admin user-management panel.</summary>
+    Task<IReadOnlyList<User>> GetAllAsync(CancellationToken ct = default);
+
     Task AddAsync(User user, CancellationToken ct = default);
+
+    void Remove(User user);
 
     Task SaveChangesAsync(CancellationToken ct = default);
 }

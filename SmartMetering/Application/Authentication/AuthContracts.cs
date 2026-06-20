@@ -19,6 +19,17 @@ public sealed record ForgotPasswordRequest(string Email);
 
 public sealed record ResetPasswordRequest(string Token, string NewPassword);
 
+/// <summary>Read model for the admin user-management panel.</summary>
+public sealed record UserDto(
+    Guid Id,
+    string FirstName,
+    string LastName,
+    string Email,
+    string PhoneNumber,
+    string Role,
+    string Status,
+    DateTime CreatedAtUtc);
+
 /// <summary>Frontend base URL used to build activation / reset links in emails.</summary>
 public sealed class AuthLinkOptions
 {

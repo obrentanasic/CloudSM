@@ -4,9 +4,8 @@ using SmartMetering.Application.Authentication;
 
 namespace SmartMetering.WebApi.Controllers;
 
-[ApiController]
 [Route("api/auth")]
-public sealed class AuthController : ControllerBase
+public sealed class AuthController : ApiControllerBase
 {
     private readonly IAuthService _auth;
 
@@ -19,6 +18,39 @@ public sealed class AuthController : ControllerBase
     {
         var id = await _auth.CreateUserAsync(request, ct);
         return Ok(new { id });
+    }
+
+    /// <summary>Admin-only: lists all user accounts for the management panel.</summary>
+    [HttpGet("users")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<IReadOnlyList<UserDto>>> GetUsers(CancellationToken ct) =>
+        Ok(await _auth.GetUsersAsync(ct));
+
+    /// <summary>Admin-only: suspends a user account (blocks login).</summary>
+    [HttpPost("users/{id:guid}/suspend")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> SuspendUser(Guid id, CancellationToken ct)
+    {
+        await _auth.SuspendUserAsync(CurrentUserId.Value, id, ct);
+        return NoContent();
+    }
+
+    /// <summary>Admin-only: lifts a suspension.</summary>
+    [HttpPost("users/{id:guid}/reactivate")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ReactivateUser(Guid id, CancellationToken ct)
+    {
+        await _auth.ReactivateUserAsync(id, ct);
+        return NoContent();
+    }
+
+    /// <summary>Admin-only: permanently deletes a user account that has no linked data.</summary>
+    [HttpDelete("users/{id:guid}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteUser(Guid id, CancellationToken ct)
+    {
+        await _auth.DeleteUserAsync(CurrentUserId.Value, id, ct);
+        return NoContent();
     }
 
     [HttpPost("set-password")]

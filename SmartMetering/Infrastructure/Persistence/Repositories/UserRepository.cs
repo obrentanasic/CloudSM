@@ -32,8 +32,13 @@ public sealed class UserRepository : IUserRepository
     public async Task<IReadOnlyList<User>> GetByRoleAsync(UserRole role, CancellationToken ct = default) =>
         await _db.Users.Where(u => u.Role == role).ToListAsync(ct);
 
+    public async Task<IReadOnlyList<User>> GetAllAsync(CancellationToken ct = default) =>
+        await _db.Users.OrderBy(u => u.CreatedAtUtc).ToListAsync(ct);
+
     public async Task AddAsync(User user, CancellationToken ct = default) =>
         await _db.Users.AddAsync(user, ct);
+
+    public void Remove(User user) => _db.Users.Remove(user);
 
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }

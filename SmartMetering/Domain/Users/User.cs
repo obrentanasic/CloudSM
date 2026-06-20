@@ -76,4 +76,11 @@ public class User : AggregateRoot
     public bool CanLogin => Status == UserStatus.Active && !string.IsNullOrEmpty(PasswordHash);
 
     public void Suspend() => Status = UserStatus.Suspended;
+
+    /// <summary>
+    /// Lifts a suspension. A user who had already set a password returns to Active; one who never
+    /// activated returns to PendingActivation (so the activation link still governs first login).
+    /// </summary>
+    public void Reactivate() =>
+        Status = string.IsNullOrEmpty(PasswordHash) ? UserStatus.PendingActivation : UserStatus.Active;
 }

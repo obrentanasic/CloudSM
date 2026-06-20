@@ -27,7 +27,9 @@ button:disabled { opacity: 0.6; }
 .small { font-size: 12px; }
 .pad { padding: 24px; }
 .error { color: var(--danger); font-size: 13px; }
+.banner { padding: 10px 16px; border-radius: 8px; font-size: 13px; }
 .error.banner { padding: 10px 16px; background: #fef2f2; }
+.banner.success { background: #ecfdf5; color: #047857; }
 
 .topbar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: #fff; border-bottom: 1px solid var(--border); }
 .topbar .spacer { flex: 1; }
