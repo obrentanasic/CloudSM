@@ -49,4 +49,27 @@ export const api = {
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  // No Content-Type header here on purpose: the browser sets multipart/form-data with the
+  // correct boundary itself. The generic request() always forces Content-Type: application/json,
+  // so form uploads go through fetch directly instead.
+  postForm: async <T>(path: string, form: FormData): Promise<T> => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+
+    if (res.status === 401) {
+      setToken(null);
+    }
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { error?: string }).error ?? `HTTP ${res.status}`);
+    }
+
+    const text = await res.text();
+    return (text ? JSON.parse(text) : null) as T;
+  },
 };

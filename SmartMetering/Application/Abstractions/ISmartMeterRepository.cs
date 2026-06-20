@@ -17,6 +17,9 @@ public interface ISmartMeterRepository
 
     Task<IReadOnlyList<SmartMeter>> GetPairedAsync(CancellationToken ct = default);
 
+    /// <summary>All registered meters — used for the admin network-status overview (Faza 10).</summary>
+    Task<IReadOnlyList<SmartMeter>> GetAllAsync(CancellationToken ct = default);
+
     Task<bool> SerialExistsAsync(string serialNumber, CancellationToken ct = default);
 
     Task<bool> AnyForPropertyAsync(EntityId propertyId, CancellationToken ct = default);

@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddSingleton(new StorageOptions(storageConnectionString));
         services.AddScoped<ITelemetryRepository, TelemetryTableRepository>();
         services.AddScoped<IMeterStatusRepository, MeterStatusTableRepository>();
+        services.AddScoped<IAlertLogRepository, AlertLogTableRepository>();
         services.AddSingleton<ITelemetryQueue, TelemetryQueue>();
         services.AddSingleton<IMeterStatusQueue, MeterStatusQueue>();
         services.AddSingleton<IAlertQueue, AlertQueue>();

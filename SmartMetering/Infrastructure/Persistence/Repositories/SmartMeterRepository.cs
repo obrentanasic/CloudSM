@@ -40,6 +40,11 @@ public sealed class SmartMeterRepository : ISmartMeterRepository
             .OrderBy(m => m.SerialNumber)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<SmartMeter>> GetAllAsync(CancellationToken ct = default) =>
+        await _db.SmartMeters
+            .OrderBy(m => m.SerialNumber)
+            .ToListAsync(ct);
+
     public Task<bool> SerialExistsAsync(string serialNumber, CancellationToken ct = default)
     {
         var serial = serialNumber.Trim().ToUpper();

@@ -20,6 +20,9 @@ public sealed class PropertyRepository : IPropertyRepository
             .OrderByDescending(p => p.CreatedAtUtc)
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<Property>> GetAllAsync(CancellationToken ct = default) =>
+        await _db.Properties.ToListAsync(ct);
+
     public async Task AddAsync(Property property, CancellationToken ct = default) =>
         await _db.Properties.AddAsync(property, ct);
 

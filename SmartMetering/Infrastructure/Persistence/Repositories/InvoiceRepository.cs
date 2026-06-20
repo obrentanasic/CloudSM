@@ -46,6 +46,11 @@ public sealed class InvoiceRepository : IInvoiceRepository
     public async Task AddAsync(Invoice invoice, CancellationToken ct = default) =>
         await _db.Invoices.AddAsync(invoice, ct);
 
+    public async Task<IReadOnlyList<Invoice>> GetAllAsync(CancellationToken ct = default) =>
+        await _db.Invoices
+            .OrderByDescending(i => i.IssuedAtUtc)
+            .ToListAsync(ct);
+
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 
     private IQueryable<Invoice> QueryByProperty(

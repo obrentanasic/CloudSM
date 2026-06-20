@@ -132,3 +132,82 @@ export interface GeneratedInvoices {
   created: number;
   skipped: number;
 }
+
+export interface ManualReadingDto {
+  id: string;
+  meterId: string;
+  serialNumber: string;
+  consumerId: string;
+  declaredTotalEnergyKwh: number;
+  note?: string | null;
+  originalImageUrl: string;
+  optimizedImageUrl?: string | null;
+  status: 'PendingReview' | 'Processed' | 'Rejected';
+  submittedAtUtc: string;
+  reviewedAtUtc?: string | null;
+  reviewNote?: string | null;
+}
+
+export const ManualReadingStatusLabel = (s: ManualReadingDto['status']) => {
+  switch (s) {
+    case 'Processed': return 'Обрађено';
+    case 'Rejected': return 'Одбијено';
+    default: return 'На чекању';
+  }
+};
+
+// ── Faza 10: admin network overview ──────────────────────────────
+export interface MeterNetworkStatus {
+  meterId: string;
+  serialNumber: string;
+  connectionType: number;
+  pairingStatus: number;
+  isOnline: boolean;
+  lastHeartbeatUtc?: string | null;
+  propertyId: string;
+  propertyName: string;
+  ownerId: string;
+  ownerName: string;
+  monthConsumptionKwh: number;
+  lastInvoiceStatus?: number | null;
+  lastInvoiceIssuedAtUtc?: string | null;
+}
+
+export interface PaymentRecord {
+  invoiceId: string;
+  serialNumber: string;
+  consumerId: string;
+  consumerName: string;
+  year: number;
+  month: number;
+  totalAmountRsd: number;
+  issuedAtUtc: string;
+  paidAtUtc?: string | null;
+}
+
+export interface InvoiceStatistics {
+  totalInvoices: number;
+  paidInvoices: number;
+  unpaidInvoices: number;
+  emailsSent: number;
+  emailsNotSent: number;
+  totalAmountPaidRsd: number;
+  totalAmountUnpaidRsd: number;
+}
+
+export interface AlertLog {
+  id: string;
+  type: number;
+  severity: number;
+  audience: number;
+  meterId: string;
+  serialNumber: string;
+  message: string;
+  occurredAtUtc: string;
+  emailSent: boolean;
+}
+
+export const AlertTypeLabel = (t: number) =>
+  (['Пад напона', 'Бројило offline', 'Нагли скок потрошње', 'Прекорачен лимит'][t] ?? 'Упозорење');
+
+export const AlertSeverityLabel = (s: number) => (s === 1 ? 'Критично' : 'Упозорење');

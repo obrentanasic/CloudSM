@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import type { GeneratedInvoices, TariffModel } from '../types';
+import { AuthImage } from '../components/AuthImage';
+import { NetworkOverviewPanel } from '../components/NetworkOverviewPanel';
+import type { GeneratedInvoices, ManualReadingDto, TariffModel } from '../types';
 
 const defaults = {
   name: 'Основни тарифни модел',
@@ -23,6 +25,9 @@ export function BillingAdminPage() {
   const [form, setForm] = useState(defaults);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GeneratedInvoices | null>(null);
+  const [pendingReadings, setPendingReadings] = useState<ManualReadingDto[]>([]);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [view, setView] = useState<'billing' | 'network'>('billing');
 
   const previousMonth = useMemo(() => {
     const d = new Date();
@@ -36,9 +41,15 @@ export function BillingAdminPage() {
     setTariffs(data);
   }, []);
 
+  const loadPendingReadings = useCallback(async () => {
+    const data = await api.get<ManualReadingDto[]>('/api/manual-readings/pending');
+    setPendingReadings(data);
+  }, []);
+
   useEffect(() => {
     loadTariffs().catch((e) => setError((e as Error).message));
-  }, [loadTariffs]);
+    loadPendingReadings().catch((e) => setError((e as Error).message));
+  }, [loadTariffs, loadPendingReadings]);
 
   async function createTariff(e: FormEvent) {
     e.preventDefault();
@@ -80,6 +91,33 @@ export function BillingAdminPage() {
     }
   }
 
+  async function approveReading(id: string) {
+    setError(null);
+    setReviewingId(id);
+    try {
+      await api.post(`/api/manual-readings/${id}/approve`, { reviewNote: null });
+      await loadPendingReadings();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
+  async function rejectReading(id: string) {
+    setError(null);
+    const reviewNote = window.prompt('Разлог одбијања (опционо):') ?? null;
+    setReviewingId(id);
+    try {
+      await api.post(`/api/manual-readings/${id}/reject`, { reviewNote });
+      await loadPendingReadings();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setReviewingId(null);
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -91,6 +129,16 @@ export function BillingAdminPage() {
 
       {error && <div className="error banner">{error}</div>}
 
+      <div className="tabs">
+        <button className={view === 'billing' ? 'tab active' : 'tab'} onClick={() => setView('billing')}>Наплата</button>
+        <button className={view === 'network' ? 'tab active' : 'tab'} onClick={() => setView('network')}>Мрежа и упозорења</button>
+      </div>
+
+      {view === 'network' ? (
+        <main className="content">
+          <NetworkOverviewPanel />
+        </main>
+      ) : (
       <main className="content admin-grid">
         <section className="card tariff-card">
           <div className="row between">
@@ -132,7 +180,7 @@ export function BillingAdminPage() {
           </form>
         </section>
 
-        <section className="card tariff-card">
+        <section className="card tariff-card span-full">
           <h2>Ручни обрачун</h2>
           <form className="limit-form" onSubmit={generate}>
             <label>Година<input type="number" value={period.year} onChange={(e) => setPeriod({ ...period, year: Number(e.target.value) })} required /></label>
@@ -145,7 +193,40 @@ export function BillingAdminPage() {
             </p>
           )}
         </section>
+
+        <section className="card tariff-card span-full">
+          <div className="row between">
+            <h2>Пријаве стања бројила на чекању</h2>
+            <span className="muted small">{pendingReadings.length} на чекању</span>
+          </div>
+          <div className="pending-readings">
+            {pendingReadings.map((r) => (
+              <div className="pending-reading-card" key={r.id}>
+                <AuthImage
+                  path={r.optimizedImageUrl ?? r.originalImageUrl}
+                  alt={`Бројило ${r.serialNumber}`}
+                  className="pending-reading-photo"
+                />
+                <div>
+                  <strong>{r.serialNumber}</strong> · пријављено {r.declaredTotalEnergyKwh.toLocaleString('sr-Latn')} kWh
+                  <div className="muted small">{new Date(r.submittedAtUtc).toLocaleString('sr-RS')}</div>
+                  {r.note && <div className="muted small">Напомена потрошача: „{r.note}”</div>}
+                  <div className="pending-reading-actions">
+                    <button disabled={reviewingId === r.id} onClick={() => approveReading(r.id)}>
+                      {reviewingId === r.id ? 'Обрада…' : 'Одобри'}
+                    </button>
+                    <button className="btn-reject" disabled={reviewingId === r.id} onClick={() => rejectReading(r.id)}>
+                      Одбиј
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {pendingReadings.length === 0 && <p className="muted small">Нема пријава на чекању.</p>}
+          </div>
+        </section>
       </main>
+      )}
     </div>
   );
 }

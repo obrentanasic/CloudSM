@@ -279,6 +279,9 @@ public sealed class BillingService : IBillingService
                 $"Smart Metering racun {invoice.Year}-{invoice.Month:D2}",
                 $"<pre>{WebUtility.HtmlEncode(content)}</pre>",
                 ct);
+
+            invoice.MarkEmailSent();
+            await _invoices.SaveChangesAsync(ct);
         }
         catch (Exception ex)
         {

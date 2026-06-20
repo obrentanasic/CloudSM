@@ -1,4 +1,4 @@
-﻿using SmartMetering.Application.ManualReadings;
+﻿using SmartMetering.Application.Abstractions;
 using SmartMetering.Domain.Common;
 
 namespace SmartMetering.Application.ManualReadings;
@@ -25,4 +25,10 @@ public interface IManualReadingService
 
     /// <summary>Billing admin rejects — reading is excluded from billing.</summary>
     Task RejectAsync(EntityId reviewerId, Guid readingId, ReviewManualReadingRequest request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Serves a reading's photo (original or optimized). Consumers may only view their own readings'
+    /// photos; staff (Admin/BillingAdmin) may view any. Throws NotFoundException otherwise.
+    /// </summary>
+    Task<ImageFile> GetImageAsync(EntityId callerId, bool isStaff, string blobName, CancellationToken ct = default);
 }

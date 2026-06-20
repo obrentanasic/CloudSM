@@ -159,6 +159,32 @@ public sealed class ManualReadingService : IManualReadingService
         _logger.LogInformation("Manual reading {Id} rejected by {ReviewerId}.", reading.Id.Value, reviewerId.Value);
     }
 
+    public async Task<ImageFile> GetImageAsync(EntityId callerId, bool isStaff, string blobName, CancellationToken ct = default)
+    {
+        var readingId = ExtractReadingId(blobName);
+        var reading = readingId is null ? null : await _readings.GetByIdAsync(EntityId.From(readingId.Value), ct);
+
+        var belongsToReading = reading is not null
+            && (reading.OriginalImageBlobName == blobName || reading.OptimizedImageBlobName == blobName);
+
+        // Consumers may only view photos attached to their own readings; staff (Admin/BillingAdmin) see all.
+        // A non-existent reading and a forbidden one both surface as 404, so we don't leak which is which.
+        if (!belongsToReading || (!isStaff && reading!.ConsumerId != callerId))
+        {
+            throw new NotFoundException("Слика није пронађена.");
+        }
+
+        return await _images.DownloadAsync(blobName, ct)
+            ?? throw new NotFoundException("Слика није пронађена.");
+    }
+
+    /// <summary>Blob names are "manual-readings/{serial}/{readingId}/{file}" — the reading id is the 3rd segment.</summary>
+    private static Guid? ExtractReadingId(string blobName)
+    {
+        var segments = blobName.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length == 4 && Guid.TryParse(segments[2], out var id) ? id : null;
+    }
+
     private ManualReadingDto Map(ManualReading r) => new(
         r.Id.Value,
         r.MeterId.Value,

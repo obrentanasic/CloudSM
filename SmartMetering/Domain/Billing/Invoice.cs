@@ -104,6 +104,11 @@ public sealed class Invoice : AggregateRoot
 
     public InvoiceStatus Status { get; private set; }
 
+    public DateTime? PaidAtUtc { get; private set; }
+
+    /// <summary>True once the generation email to the consumer was confirmed sent (Faza 10 statistics).</summary>
+    public bool EmailSent { get; private set; }
+
     public string TextBlobName { get; private set; }
 
     public string PdfBlobName { get; private set; }
@@ -165,5 +170,11 @@ public sealed class Invoice : AggregateRoot
         PdfBlobName = pdfBlobName;
     }
 
-    public void MarkPaid() => Status = InvoiceStatus.Paid;
+    public void MarkPaid()
+    {
+        Status = InvoiceStatus.Paid;
+        PaidAtUtc = DateTime.UtcNow;
+    }
+
+    public void MarkEmailSent() => EmailSent = true;
 }

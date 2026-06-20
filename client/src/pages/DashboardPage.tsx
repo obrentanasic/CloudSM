@@ -5,6 +5,7 @@ import { useTelemetryHub } from '../hooks/useTelemetryHub';
 import { TariffBarChart, VoltageLoadChart } from '../components/Charts';
 import { LimitPanel } from '../components/LimitPanel';
 import { InvoicePanel } from '../components/InvoicePanel';
+import { ManualReadingPanel } from '../components/ManualReadingPanel';
 import { BillingAdminPage } from './BillingAdminPage';
 import type { Meter, MeterLiveUpdate, MeterStatus, Property, TelemetryPoint } from '../types';
 import { TariffLabel } from '../types';
@@ -143,6 +144,7 @@ function ConsumerDashboard() {
             <TariffBarChart points={points} />
           </section>
           {user?.role === 'Consumer' && <LimitPanel />}
+          {user?.role === 'Consumer' && <ManualReadingPanel meters={meters} />}
           <InvoicePanel propertyId={activeId} meterId={selectedMeterId} />
         </main>
       ) : (

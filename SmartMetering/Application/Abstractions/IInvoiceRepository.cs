@@ -27,6 +27,9 @@ public interface IInvoiceRepository
         int take,
         CancellationToken ct = default);
 
+    /// <summary>All invoices — used for the admin network/payments overview and statistics (Faza 10).</summary>
+    Task<IReadOnlyList<Invoice>> GetAllAsync(CancellationToken ct = default);
+
     Task AddAsync(Invoice invoice, CancellationToken ct = default);
 
     Task SaveChangesAsync(CancellationToken ct = default);
