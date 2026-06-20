@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SmartMetering.Domain.Billing;
 using SmartMetering.Domain.Limits;
+using SmartMetering.Domain.ManualReadings;
 using SmartMetering.Domain.Meters;
 using SmartMetering.Domain.Properties;
 using SmartMetering.Domain.Users;
@@ -24,6 +25,8 @@ public class AppDbContext : DbContext
     public DbSet<TariffModel> TariffModels => Set<TariffModel>();
 
     public DbSet<Invoice> Invoices => Set<Invoice>();
+
+    public DbSet<ManualReading> ManualReadings => Set<ManualReading>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

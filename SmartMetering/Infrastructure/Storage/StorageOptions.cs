@@ -12,4 +12,5 @@ public sealed class StorageOptions
     public const string MeterStatusQueue = "meterstatus-queue";
     public const string AlertQueue = "alert-queue";
     public const string InvoicesContainer = "invoices";
+    public const string MeterReadingsContainer = "meter-readings";
 }
