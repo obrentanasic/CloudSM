@@ -19,8 +19,21 @@ Console.Write("Connection type [1=single-phase, 3=three-phase]: ");
 var isThreePhase = (Console.ReadLine() ?? "1").Trim() == "3";
 var connectionType = isThreePhase ? 1 : 0;
 
-var deviceUuid = Guid.NewGuid().ToString();
-Console.WriteLine($"Device UUID: {deviceUuid}");
+// A real meter's UUID is fixed in hardware, so persist it per serial and reuse it on every run.
+// Otherwise each run looks like a different device trying to claim an already-paired meter (HTTP 409).
+var uuidStorePath = Path.Combine(AppContext.BaseDirectory, $"device-{serial}.uuid");
+string deviceUuid;
+if (File.Exists(uuidStorePath))
+{
+    deviceUuid = File.ReadAllText(uuidStorePath).Trim();
+    Console.WriteLine($"Device UUID (reused): {deviceUuid}");
+}
+else
+{
+    deviceUuid = Guid.NewGuid().ToString();
+    File.WriteAllText(uuidStorePath, deviceUuid);
+    Console.WriteLine($"Device UUID (new, saved): {deviceUuid}");
+}
 
 // ── 1. Handshake ─────────────────────────────────────────────────────────────
 Console.WriteLine("Registering device (handshake)...");

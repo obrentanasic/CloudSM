@@ -17,12 +17,14 @@ public sealed class ManualReading : AggregateRoot
     }
 
     private ManualReading(
+        EntityId id,
         EntityId meterId,
         string serialNumber,
         EntityId consumerId,
         decimal declaredTotalEnergyKwh,
         string? note,
         string originalImageBlobName)
+        : base(id)
     {
         MeterId = meterId;
         SerialNumber = serialNumber;
@@ -60,13 +62,14 @@ public sealed class ManualReading : AggregateRoot
     public string? ReviewNote { get; private set; }
 
     public static ManualReading Submit(
+        EntityId id,
         EntityId meterId,
         string serialNumber,
         EntityId consumerId,
         decimal declaredTotalEnergyKwh,
         string? note,
         string originalImageBlobName) =>
-        new(meterId, serialNumber.Trim().ToUpperInvariant(), consumerId, declaredTotalEnergyKwh, note, originalImageBlobName);
+        new(id, meterId, serialNumber.Trim().ToUpperInvariant(), consumerId, declaredTotalEnergyKwh, note, originalImageBlobName);
 
     public void AttachOptimizedImage(string optimizedImageBlobName) =>
         OptimizedImageBlobName = optimizedImageBlobName;

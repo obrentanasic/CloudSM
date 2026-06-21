@@ -14,6 +14,10 @@ public sealed class ManualReadingRepository : IManualReadingRepository
     public Task<ManualReading?> GetByIdAsync(EntityId id, CancellationToken ct = default) =>
         _db.ManualReadings.FirstOrDefaultAsync(r => r.Id == id, ct);
 
+    public Task<ManualReading?> GetByBlobNameAsync(string blobName, CancellationToken ct = default) =>
+        _db.ManualReadings.FirstOrDefaultAsync(
+            r => r.OriginalImageBlobName == blobName || r.OptimizedImageBlobName == blobName, ct);
+
     public async Task<IReadOnlyList<ManualReading>> GetPendingAsync(CancellationToken ct = default) =>
         await _db.ManualReadings
             .Where(r => r.Status == ManualReadingStatus.PendingReview)
@@ -24,17 +28,6 @@ public sealed class ManualReadingRepository : IManualReadingRepository
         await _db.ManualReadings
             .Where(r => r.ConsumerId == consumerId)
             .OrderByDescending(r => r.SubmittedAtUtc)
-            .ToListAsync(ct);
-
-    public async Task<IReadOnlyList<ManualReading>> GetProcessedForPeriodAsync(
-        EntityId meterId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default) =>
-        await _db.ManualReadings
-            .Where(r => r.MeterId == meterId
-                        && r.Status == ManualReadingStatus.Processed
-                        && r.ReviewedAtUtc != null
-                        && r.ReviewedAtUtc >= fromUtc
-                        && r.ReviewedAtUtc < toUtc)
-            .OrderBy(r => r.ReviewedAtUtc)
             .ToListAsync(ct);
 
     public async Task AddAsync(ManualReading reading, CancellationToken ct = default) =>

@@ -76,12 +76,15 @@ public sealed class ManualReadingService : IManualReadingService
         }
 
         var extension = Path.GetExtension(imageFileName) is { Length: > 0 } ext ? ext : ".jpg";
-        var readingId = Guid.NewGuid();
-        var blobName = $"manual-readings/{meter.SerialNumber}/{readingId}/original{extension}";
+        // Use the reading's own id in the blob path so the OptimizeReadingImage function (which parses
+        // the id out of the path) updates the right row. The image proxy resolves by blob name directly.
+        var readingId = EntityId.New();
+        var blobName = $"manual-readings/{meter.SerialNumber}/{readingId.Value}/original{extension}";
 
         await _images.SaveOriginalAsync(blobName, imageContent, imageContentType, ct);
 
         var reading = ManualReading.Submit(
+            readingId,
             meter.Id,
             meter.SerialNumber,
             consumerId,
@@ -130,6 +133,8 @@ public sealed class ManualReadingService : IManualReadingService
 
         // Feed the approved reading into the telemetry stream as a single synthetic point,
         // so it flows through the exact same BillingCalculator logic as device-reported readings.
+        // Timestamp it at submission time (when the consumer actually read the meter), not approval
+        // time — otherwise a reading approved in a later month would be billed in the wrong period.
         var telemetry = Telemetry.Create(
             meter.Id,
             meter.SerialNumber,
@@ -139,7 +144,7 @@ public sealed class ManualReadingService : IManualReadingService
             voltageL1: null, voltageL2: null, voltageL3: null,
             currentL1: null, currentL2: null, currentL3: null,
             powerFactorL1: null, powerFactorL2: null, powerFactorL3: null,
-            observationTime: reading.ReviewedAtUtc ?? DateTime.UtcNow);
+            observationTime: reading.SubmittedAtUtc);
 
         await _telemetry.SaveAsync(telemetry, ct);
 
@@ -161,28 +166,19 @@ public sealed class ManualReadingService : IManualReadingService
 
     public async Task<ImageFile> GetImageAsync(EntityId callerId, bool isStaff, string blobName, CancellationToken ct = default)
     {
-        var readingId = ExtractReadingId(blobName);
-        var reading = readingId is null ? null : await _readings.GetByIdAsync(EntityId.From(readingId.Value), ct);
-
-        var belongsToReading = reading is not null
-            && (reading.OriginalImageBlobName == blobName || reading.OptimizedImageBlobName == blobName);
+        // Resolve the reading by the stored blob name itself rather than parsing an id out of the path,
+        // so it works regardless of how the path was built (and for readings created before that fix).
+        var reading = await _readings.GetByBlobNameAsync(blobName, ct);
 
         // Consumers may only view photos attached to their own readings; staff (Admin/BillingAdmin) see all.
         // A non-existent reading and a forbidden one both surface as 404, so we don't leak which is which.
-        if (!belongsToReading || (!isStaff && reading!.ConsumerId != callerId))
+        if (reading is null || (!isStaff && reading.ConsumerId != callerId))
         {
             throw new NotFoundException("Слика није пронађена.");
         }
 
         return await _images.DownloadAsync(blobName, ct)
             ?? throw new NotFoundException("Слика није пронађена.");
-    }
-
-    /// <summary>Blob names are "manual-readings/{serial}/{readingId}/{file}" — the reading id is the 3rd segment.</summary>
-    private static Guid? ExtractReadingId(string blobName)
-    {
-        var segments = blobName.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return segments.Length == 4 && Guid.TryParse(segments[2], out var id) ? id : null;
     }
 
     private ManualReadingDto Map(ManualReading r) => new(

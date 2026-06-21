@@ -7,13 +7,12 @@ public interface IManualReadingRepository
 {
     Task<ManualReading?> GetByIdAsync(EntityId id, CancellationToken ct = default);
 
+    /// <summary>Finds the reading whose original or optimized image is stored at <paramref name="blobName"/>.</summary>
+    Task<ManualReading?> GetByBlobNameAsync(string blobName, CancellationToken ct = default);
+
     Task<IReadOnlyList<ManualReading>> GetPendingAsync(CancellationToken ct = default);
 
     Task<IReadOnlyList<ManualReading>> GetByConsumerAsync(EntityId consumerId, CancellationToken ct = default);
-
-    /// <summary>Approved (Processed) readings for a meter within a billing period — fed into the monthly calculation.</summary>
-    Task<IReadOnlyList<ManualReading>> GetProcessedForPeriodAsync(
-        EntityId meterId, DateTime fromUtc, DateTime toUtc, CancellationToken ct = default);
 
     Task AddAsync(ManualReading reading, CancellationToken ct = default);
 

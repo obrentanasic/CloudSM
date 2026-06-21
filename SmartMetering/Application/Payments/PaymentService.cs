@@ -72,4 +72,43 @@ public sealed class PaymentService : IPaymentService
 
         _logger.LogInformation("Invoice {InvoiceId} marked as Paid via Stripe session {SessionId}.", invoiceId, stripeSessionId);
     }
+
+    public async Task<bool> ConfirmCheckoutAsync(EntityId consumerId, string stripeSessionId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(stripeSessionId))
+        {
+            return false;
+        }
+
+        // Returns null unless Stripe reports the session as paid.
+        var invoiceId = await _stripe.GetInvoiceIdFromSessionAsync(stripeSessionId, ct);
+        if (invoiceId is null)
+        {
+            return false;
+        }
+
+        var invoice = await _invoices.GetByIdAsync(EntityId.From(invoiceId.Value), ct);
+        if (invoice is null)
+        {
+            return false;
+        }
+
+        if (invoice.ConsumerId != consumerId)
+        {
+            throw new AppException("Nemate pristup ovom računu.", AppException.StatusCodes.Forbidden);
+        }
+
+        if (invoice.Status == InvoiceStatus.Paid)
+        {
+            return true;
+        }
+
+        invoice.MarkPaid();
+        await _invoices.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Invoice {InvoiceId} confirmed Paid via success-page callback (session {SessionId}).",
+            invoiceId, stripeSessionId);
+        return true;
+    }
 }

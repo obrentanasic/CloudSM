@@ -88,6 +88,16 @@ public sealed class BillingController : ApiControllerBase
         return Ok(result);
     }
 
-    // Payment confirmation is handled out-of-band by the StripeWebhook Azure Function,
-    // which verifies the Stripe-Signature and marks the invoice Paid.
+    /// <summary>
+    /// Consumer-facing payment confirmation. The success page posts the Checkout session id here after
+    /// returning from Stripe; we verify with Stripe that it's paid and mark the invoice Paid. This is a
+    /// reliable fallback for local dev — the StripeWebhook Azure Function remains the primary mechanism.
+    /// </summary>
+    [HttpPost("payment-confirm")]
+    [Authorize(Roles = "Consumer")]
+    public async Task<ActionResult<PaymentConfirmationDto>> ConfirmPayment([FromBody] ConfirmPaymentRequest request, CancellationToken ct)
+    {
+        var paid = await _payment.ConfirmCheckoutAsync(CurrentUserId, request.SessionId, ct);
+        return Ok(new PaymentConfirmationDto(paid));
+    }
 }

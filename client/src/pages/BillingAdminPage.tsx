@@ -28,6 +28,7 @@ export function BillingAdminPage() {
   const [result, setResult] = useState<GeneratedInvoices | null>(null);
   const [pendingReadings, setPendingReadings] = useState<ManualReadingDto[]>([]);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
   const [view, setView] = useState<'billing' | 'network' | 'users'>('billing');
   const isAdmin = user?.role === 'Admin';
 
@@ -77,8 +78,16 @@ export function BillingAdminPage() {
   }
 
   async function activate(id: string) {
-    await api.post(`/api/billing/tariffs/${id}/activate`);
-    await loadTariffs();
+    setError(null);
+    setActivatingId(id);
+    try {
+      await api.post(`/api/billing/tariffs/${id}/activate`);
+      await loadTariffs();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setActivatingId(null);
+    }
   }
 
   async function generate(e: FormEvent) {
@@ -160,9 +169,14 @@ export function BillingAdminPage() {
                   <div className="muted small">
                     зелена до {tariff.greenLimitKwh} kWh · плава до {tariff.blueLimitKwh} kWh
                   </div>
+                  <div className="muted small">креиран {new Date(tariff.createdAtUtc).toLocaleString('sr-RS')}</div>
                 </div>
                 <span className={tariff.isActive ? 'badge paid' : 'badge'}>{tariff.isActive ? 'Активан' : 'Неактиван'}</span>
-                {!tariff.isActive && <button className="link" onClick={() => activate(tariff.id)}>Активирај</button>}
+                {!tariff.isActive && (
+                  <button className="link" disabled={activatingId === tariff.id} onClick={() => activate(tariff.id)}>
+                    {activatingId === tariff.id ? 'Активирам…' : 'Активирај'}
+                  </button>
+                )}
               </div>
             ))}
             {tariffs.length === 0 && <p className="muted small">Нема дефинисаних тарифних модела.</p>}

@@ -75,12 +75,17 @@ public sealed class BillingService : IBillingService
 
         if (activate)
         {
+            // Deactivate the currently active model and persist BEFORE inserting the new active one.
+            // The filtered unique index IX_TariffModels_IsActive ([IsActive] = 1) allows only one
+            // active row, and EF gives no ordering guarantee between the deactivate and insert in a
+            // single SaveChanges, so they must be separate round-trips.
             var existing = await _tariffs.GetAllAsync(ct);
-            foreach (var item in existing)
+            foreach (var item in existing.Where(t => t.IsActive))
             {
                 item.Deactivate();
             }
 
+            await _tariffs.SaveChangesAsync(ct);
             tariff.Activate();
         }
 
@@ -94,11 +99,21 @@ public sealed class BillingService : IBillingService
         var tariff = await _tariffs.GetByIdAsync(EntityId.From(tariffId), ct)
             ?? throw new NotFoundException("Tarifni model nije pronadjen.");
 
+        if (tariff.IsActive)
+        {
+            return;
+        }
+
+        // Deactivate the currently active model and persist FIRST. The filtered unique index
+        // IX_TariffModels_IsActive ([IsActive] = 1) rejects two active rows, and EF doesn't
+        // guarantee the deactivate UPDATE runs before the activate UPDATE in one SaveChanges batch.
         var all = await _tariffs.GetAllAsync(ct);
-        foreach (var item in all)
+        foreach (var item in all.Where(t => t.IsActive))
         {
             item.Deactivate();
         }
+
+        await _tariffs.SaveChangesAsync(ct);
 
         tariff.Activate();
         await _tariffs.SaveChangesAsync(ct);

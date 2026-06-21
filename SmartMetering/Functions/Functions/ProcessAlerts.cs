@@ -46,12 +46,21 @@ public sealed class ProcessAlerts
         }
         else
         {
+            // Send per-recipient and swallow individual failures: a single bad address must not throw
+            // the whole function, or the queue would retry and re-email everyone who already received it.
             foreach (var email in recipients)
             {
-                await _email.SendAsync(email, subject, html, ct);
+                try
+                {
+                    await _email.SendAsync(email, subject, html, ct);
+                    emailSent = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to email alert {Type} to {Email}.", (AlertType)message.Type, email);
+                }
             }
 
-            emailSent = true;
             _logger.LogInformation("Alert {Type} emailed to {Count} recipient(s).", (AlertType)message.Type, recipients.Count);
         }
 
