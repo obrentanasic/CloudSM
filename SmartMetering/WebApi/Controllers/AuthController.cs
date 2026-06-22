@@ -26,6 +26,14 @@ public sealed class AuthController : ApiControllerBase
     public async Task<ActionResult<IReadOnlyList<UserDto>>> GetUsers(CancellationToken ct) =>
         Ok(await _auth.GetUsersAsync(ct));
 
+    [HttpPost("users/{id:guid}/resend-activation")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ResendActivation(Guid id, CancellationToken ct)
+    {
+        await _auth.ResendActivationAsync(id, ct);
+        return NoContent();
+    }
+
     /// <summary>Admin-only: suspends a user account (blocks login).</summary>
     [HttpPost("users/{id:guid}/suspend")]
     [Authorize(Roles = "Admin")]

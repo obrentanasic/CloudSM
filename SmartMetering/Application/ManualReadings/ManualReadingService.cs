@@ -18,6 +18,7 @@ public sealed class ManualReadingService : IManualReadingService
 
     private readonly IManualReadingRepository _readings;
     private readonly ISmartMeterRepository _meters;
+    private readonly IPropertyRepository _properties;
     private readonly IImageStorage _images;
     private readonly ITelemetryRepository _telemetry;
     private readonly ILogger<ManualReadingService> _logger;
@@ -25,12 +26,14 @@ public sealed class ManualReadingService : IManualReadingService
     public ManualReadingService(
         IManualReadingRepository readings,
         ISmartMeterRepository meters,
+        IPropertyRepository properties,
         IImageStorage images,
         ITelemetryRepository telemetry,
         ILogger<ManualReadingService> logger)
     {
         _readings = readings;
         _meters = meters;
+        _properties = properties;
         _images = images;
         _telemetry = telemetry;
         _logger = logger;
@@ -67,10 +70,8 @@ public sealed class ManualReadingService : IManualReadingService
         var meter = await _meters.GetByIdAsync(EntityId.From(request.MeterId), ct)
             ?? throw new NotFoundException("Бројило није пронађено.");
 
-        var owner = await _meters.GetByPropertyAsync(meter.PropertyId, ct);
-        // Ownership is enforced one level up via the property; re-validated here defensively.
-        var consumerOwnsMeter = owner.Any(m => m.Id == meter.Id);
-        if (!consumerOwnsMeter)
+        var property = await _properties.GetByIdAsync(meter.PropertyId, ct);
+        if (property is null || !property.IsOwnedBy(consumerId))
         {
             throw new AppException("Бројило није пронађено.", AppException.StatusCodes.NotFound);
         }
@@ -80,8 +81,6 @@ public sealed class ManualReadingService : IManualReadingService
         // the id out of the path) updates the right row. The image proxy resolves by blob name directly.
         var readingId = EntityId.New();
         var blobName = $"manual-readings/{meter.SerialNumber}/{readingId.Value}/original{extension}";
-
-        await _images.SaveOriginalAsync(blobName, imageContent, imageContentType, ct);
 
         var reading = ManualReading.Submit(
             readingId,
@@ -94,6 +93,18 @@ public sealed class ManualReadingService : IManualReadingService
 
         await _readings.AddAsync(reading, ct);
         await _readings.SaveChangesAsync(ct);
+
+        try
+        {
+            // Commit the row before uploading the blob so the optimization trigger can always find it.
+            await _images.SaveOriginalAsync(blobName, imageContent, imageContentType, ct);
+        }
+        catch
+        {
+            _readings.Remove(reading);
+            await _readings.SaveChangesAsync(ct);
+            throw;
+        }
 
         _logger.LogInformation(
             "Manual reading {Id} submitted for meter {Serial} by consumer {ConsumerId}.",

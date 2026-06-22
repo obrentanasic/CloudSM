@@ -47,14 +47,17 @@ public sealed class AuthService : IAuthService
         await _users.AddAsync(user, ct);
         await _users.SaveChangesAsync(ct);
 
-        var link = $"{_links.ClientBaseUrl}/set-password?token={token}";
-        await _email.SendAsync(
-            user.Email,
-            "Активирајте свој Smart Metering налог",
-            $"<p>Поштовани {user.FullName},</p>" +
-            $"<p>Креиран вам је налог. Кликните на линк да поставите лозинку (важи 24 сата):</p>" +
-            $"<p><a href=\"{link}\">{link}</a></p>",
-            ct);
+        try
+        {
+            await SendActivationEmailAsync(user, token, ct);
+        }
+        catch
+        {
+            // Do not leave an unusable account that blocks the admin from retrying creation.
+            _users.Remove(user);
+            await _users.SaveChangesAsync(ct);
+            throw;
+        }
 
         return user.Id.Value;
     }
@@ -130,6 +133,21 @@ public sealed class AuthService : IAuthService
         return users.Select(Map).ToList();
     }
 
+    public async Task ResendActivationAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await _users.GetByIdAsync(EntityId.From(userId), ct)
+            ?? throw new NotFoundException("Корисник није пронађен.");
+
+        if (user.Status != UserStatus.PendingActivation)
+        {
+            throw new ConflictException("Активациони мејл се може послати само налогу који чека активацију.");
+        }
+
+        var token = user.IssueSecurityToken(ActivationTokenLifetime);
+        await _users.SaveChangesAsync(ct);
+        await SendActivationEmailAsync(user, token, ct);
+    }
+
     public async Task SuspendUserAsync(Guid actingUserId, Guid userId, CancellationToken ct = default)
     {
         if (actingUserId == userId)
@@ -179,4 +197,16 @@ public sealed class AuthService : IAuthService
 
     private static UserDto Map(User u) =>
         new(u.Id.Value, u.FirstName, u.LastName, u.Email, u.PhoneNumber, u.Role.ToString(), u.Status.ToString(), u.CreatedAtUtc);
+
+    private Task SendActivationEmailAsync(User user, string token, CancellationToken ct)
+    {
+        var link = $"{_links.ClientBaseUrl}/set-password?token={token}";
+        return _email.SendAsync(
+            user.Email,
+            "Активирајте свој Smart Metering налог",
+            $"<p>Поштовани {user.FullName},</p>" +
+            $"<p>Креиран вам је налог. Кликните на линк да поставите лозинку (важи 24 сата):</p>" +
+            $"<p><a href=\"{link}\">{link}</a></p>",
+            ct);
+    }
 }

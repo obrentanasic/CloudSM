@@ -30,15 +30,17 @@ export function useTelemetryHub(
     connection.on('ReceiveMeterUpdate', (update: MeterLiveUpdate) => onUpdateRef.current(update));
 
     let cancelled = false;
+    const joinProperty = () => connection.invoke('JoinPropertyGroup', propertyId);
+
+    connection.onreconnected(() => {
+      if (!cancelled) {
+        void joinProperty().catch((err) => console.error('SignalR group rejoin error:', err));
+      }
+    });
 
     connection
       .start()
-      .then(() => {
-        if (!cancelled) {
-          return connection.invoke('JoinPropertyGroup', propertyId);
-        }
-        return undefined;
-      })
+      .then(() => (cancelled ? undefined : joinProperty()))
       .catch((err) => console.error('SignalR connection error:', err));
 
     return () => {

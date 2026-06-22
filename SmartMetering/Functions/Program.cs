@@ -29,6 +29,11 @@ var stripeOptions = new StripeOptions
     WebhookSecret = config["StripeWebhookSecret"] ?? string.Empty,
 };
 
+if (string.IsNullOrWhiteSpace(stripeOptions.SecretKey) || string.IsNullOrWhiteSpace(stripeOptions.WebhookSecret))
+{
+    throw new InvalidOperationException("Missing StripeSecretKey or StripeWebhookSecret setting.");
+}
+
 builder.Services
     .AddPersistence(sqlConnectionString)
     .AddStorage(storageConnectionString)

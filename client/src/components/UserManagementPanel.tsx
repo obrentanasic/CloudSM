@@ -58,6 +58,10 @@ export function UserManagementPanel() {
     }
   }
 
+  const resendActivation = (u: UserAccount) => act(u.id, async () => {
+    await api.post(`/api/auth/users/${u.id}/resend-activation`);
+    setNotice(`Активациони мејл за ${u.email} је поново послат.`);
+  });
   const suspend = (u: UserAccount) => act(u.id, () => api.post(`/api/auth/users/${u.id}/suspend`));
   const reactivate = (u: UserAccount) => act(u.id, () => api.post(`/api/auth/users/${u.id}/reactivate`));
   const remove = (u: UserAccount) => {
@@ -85,6 +89,9 @@ export function UserManagementPanel() {
                 </div>
               </div>
               <span className={statusBadge(u.status)}>{UserStatusLabel(u.status)}</span>
+              {u.status === 'PendingActivation' && (
+                <button className="link" disabled={busyId === u.id} onClick={() => resendActivation(u)}>Поново пошаљи активацију</button>
+              )}
               {u.status === 'Suspended' ? (
                 <button className="link" disabled={busyId === u.id} onClick={() => reactivate(u)}>Реактивирај</button>
               ) : (

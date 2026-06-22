@@ -58,7 +58,7 @@ function ConsumerDashboard() {
   const loadProperties = useCallback(async () => {
     const data = await api.get<Property[]>('/api/properties');
     setProperties(data);
-    setActiveId((cur) => cur ?? data[0]?.id ?? null);
+    setActiveId((cur) => (cur && data.some((p) => p.id === cur) ? cur : data[0]?.id ?? null));
   }, []);
 
   useEffect(() => {
@@ -86,7 +86,7 @@ function ConsumerDashboard() {
   useEffect(() => {
     if (!selectedMeterId) { setPoints([]); return; }
     let cancelled = false;
-    api.get<TelemetryPoint[]>(`/api/meters/${selectedMeterId}/telemetry?take=100`)
+    api.get<TelemetryPoint[]>(`/api/meters/${selectedMeterId}/telemetry?take=500`)
       .then((data) => { if (!cancelled) setPoints(data); })
       .catch((e) => setError((e as Error).message));
     return () => { cancelled = true; };
@@ -95,12 +95,13 @@ function ConsumerDashboard() {
   // Live updates over SignalR for the active property.
   const handleUpdate = useCallback((u: MeterLiveUpdate) => {
     setStatuses((prev) => ({ ...prev, [u.meterId]: fromUpdate(u) }));
+    setMeters((prev) => prev.map((m) => (m.id === u.meterId ? { ...m, pairingStatus: 1 } : m)));
     setSelectedMeterId((sel) => {
       if (sel === u.meterId) {
         setPoints((prev) => [
           { observationTime: u.observationTime, totalEnergyKwh: u.totalEnergyKwh, currentLoadKw: u.currentLoadKw, voltage: u.voltage, tariff: u.tariff },
           ...prev,
-        ].slice(0, 100));
+        ].slice(0, 500));
       }
       return sel;
     });
@@ -137,6 +138,7 @@ function ConsumerDashboard() {
             onChanged={async () => {
               const list = await api.get<Meter[]>(`/api/meters?propertyId=${activeId}`);
               setMeters(list);
+              setSelectedMeterId((cur) => (cur && list.some((m) => m.id === cur) ? cur : list[0]?.id ?? null));
             }}
           />
           <section className="charts">
@@ -162,33 +164,100 @@ function PropertyBar({
   onSelect: (id: string) => void;
   onChanged: () => Promise<void>;
 }) {
+  const emptyForm = { name: '', city: '', address: '', description: '' };
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: '', city: '', address: '', description: '' });
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [error, setError] = useState<string | null>(null);
+  const active = properties.find((p) => p.id === activeId) ?? null;
 
   async function add(e: FormEvent) {
     e.preventDefault();
-    await api.post('/api/properties', form);
-    setForm({ name: '', city: '', address: '', description: '' });
+    setError(null);
+    try {
+      await api.post('/api/properties', form);
+      setForm(emptyForm);
+      setAdding(false);
+      await onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  function beginEdit() {
+    if (!active) return;
+    setEditForm({
+      name: active.name,
+      city: active.city,
+      address: active.address,
+      description: active.description ?? '',
+    });
     setAdding(false);
-    await onChanged();
+    setEditing(true);
+    setError(null);
+  }
+
+  async function update(e: FormEvent) {
+    e.preventDefault();
+    if (!active) return;
+    setError(null);
+    try {
+      await api.put(`/api/properties/${active.id}`, editForm);
+      setEditing(false);
+      await onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  async function remove() {
+    if (!active || !window.confirm(`Обрисати објекат „${active.name}”?`)) return;
+    setError(null);
+    try {
+      await api.del(`/api/properties/${active.id}`);
+      setEditing(false);
+      await onChanged();
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   return (
-    <div className="tabs">
-      {properties.map((p) => (
-        <button key={p.id} className={p.id === activeId ? 'tab active' : 'tab'} onClick={() => onSelect(p.id)}>
-          {p.name}
-        </button>
-      ))}
-      <button className="tab add" onClick={() => setAdding((a) => !a)}>＋ објекат</button>
+    <div className="property-bar">
+      <div className="tabs">
+        {properties.map((p) => (
+          <button key={p.id} className={p.id === activeId ? 'tab active' : 'tab'} onClick={() => onSelect(p.id)}>
+            {p.name}
+          </button>
+        ))}
+        <button className="tab add" onClick={() => { setAdding((a) => !a); setEditing(false); }}>＋ објекат</button>
+        {active && <button className="link" onClick={beginEdit}>Измени објекат</button>}
+        {active && <button className="link danger" onClick={() => void remove()}>Обриши објекат</button>}
+      </div>
+
       {adding && (
         <form className="inline-form" onSubmit={add}>
           <input placeholder="Назив" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <input placeholder="Град" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} required />
           <input placeholder="Адреса" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
+          <input placeholder="Опис (опционо)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <button type="submit">Сачувај</button>
+          <button type="button" className="link" onClick={() => setAdding(false)}>Откажи</button>
         </form>
       )}
+
+      {editing && active && (
+        <form className="inline-form" onSubmit={update}>
+          <input placeholder="Назив" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+          <input placeholder="Град" value={editForm.city} onChange={(e) => setEditForm({ ...editForm, city: e.target.value })} required />
+          <input placeholder="Адреса" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} required />
+          <input placeholder="Опис (опционо)" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+          <button type="submit">Сачувај измене</button>
+          <button type="button" className="link" onClick={() => setEditing(false)}>Откажи</button>
+        </form>
+      )}
+      {error && <div className="error property-error">{error}</div>}
     </div>
   );
 }
@@ -204,7 +273,9 @@ function MeterPanel({
   onChanged: () => Promise<void>;
 }) {
   const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ serialNumber: '', connectionType: 0, note: '' });
+  const [editForm, setEditForm] = useState({ connectionType: 0, note: '' });
   const [err, setErr] = useState<string | null>(null);
 
   async function add(e: FormEvent) {
@@ -215,14 +286,39 @@ function MeterPanel({
       setForm({ serialNumber: '', connectionType: 0, note: '' });
       setAdding(false);
       await onChanged();
-    } catch (e2) {
-      setErr((e2 as Error).message);
+    } catch (error) {
+      setErr((error as Error).message);
     }
   }
 
-  async function remove(id: string) {
-    await api.del(`/api/meters/${id}`);
-    await onChanged();
+  function beginEdit(meter: Meter) {
+    setEditingId(meter.id);
+    setEditForm({ connectionType: meter.connectionType, note: meter.note ?? '' });
+    setErr(null);
+  }
+
+  async function update(e: FormEvent, id: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    setErr(null);
+    try {
+      await api.put(`/api/meters/${id}`, { ...editForm, connectionType: Number(editForm.connectionType) });
+      setEditingId(null);
+      await onChanged();
+    } catch (error) {
+      setErr((error as Error).message);
+    }
+  }
+
+  async function remove(id: string, serialNumber: string) {
+    if (!window.confirm(`Обрисати бројило ${serialNumber}?`)) return;
+    setErr(null);
+    try {
+      await api.del(`/api/meters/${id}`);
+      await onChanged();
+    } catch (error) {
+      setErr((error as Error).message);
+    }
   }
 
   return (
@@ -233,7 +329,7 @@ function MeterPanel({
       </div>
 
       {adding && (
-        <form className="inline-form" onSubmit={add}>
+        <form className="inline-form meter-form" onSubmit={add}>
           <input placeholder="SM-YYYY-XXXXX" value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} required />
           <select value={form.connectionType} onChange={(e) => setForm({ ...form, connectionType: Number(e.target.value) })}>
             <option value={0}>Монофазно</option>
@@ -241,6 +337,7 @@ function MeterPanel({
           </select>
           <input placeholder="Напомена" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
           <button type="submit">Региструј</button>
+          <button type="button" className="link" onClick={() => setAdding(false)}>Откажи</button>
         </form>
       )}
       {err && <div className="error">{err}</div>}
@@ -256,6 +353,7 @@ function MeterPanel({
                 <span className={`dot ${s?.online ? 'on' : 'off'}`} title={s?.online ? 'online' : 'offline'} />
               </div>
               <div className="muted small">{m.connectionType === 0 ? 'Монофазно' : 'Трофазно'} · {m.maxApprovedPowerKw} kW · {m.pairingStatus === 1 ? 'упарено' : 'неупарено'}</div>
+              {m.note && <div className="muted small">{m.note}</div>}
               {s ? (
                 <ul className="metrics">
                   <li>Оптерећење <b>{s.load.toFixed(2)} kW</b></li>
@@ -266,7 +364,23 @@ function MeterPanel({
               ) : (
                 <div className="muted small">Нема још података.</div>
               )}
-              <button className="link danger" onClick={(e) => { e.stopPropagation(); remove(m.id); }}>Обриши</button>
+
+              {editingId === m.id ? (
+                <form className="meter-edit-form" onSubmit={(e) => update(e, m.id)} onClick={(e) => e.stopPropagation()}>
+                  <select value={editForm.connectionType} onChange={(e) => setEditForm({ ...editForm, connectionType: Number(e.target.value) })}>
+                    <option value={0}>Монофазно</option>
+                    <option value={1}>Трофазно</option>
+                  </select>
+                  <input placeholder="Напомена" value={editForm.note} onChange={(e) => setEditForm({ ...editForm, note: e.target.value })} />
+                  <button type="submit">Сачувај</button>
+                  <button type="button" className="link" onClick={() => setEditingId(null)}>Откажи</button>
+                </form>
+              ) : (
+                <div className="meter-actions">
+                  <button type="button" className="link" onClick={(e) => { e.stopPropagation(); beginEdit(m); }}>Измени</button>
+                  <button type="button" className="link danger" onClick={(e) => { e.stopPropagation(); void remove(m.id, m.serialNumber); }}>Обриши</button>
+                </div>
+              )}
             </div>
           );
         })}

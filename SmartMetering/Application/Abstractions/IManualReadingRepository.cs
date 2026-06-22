@@ -16,5 +16,7 @@ public interface IManualReadingRepository
 
     Task AddAsync(ManualReading reading, CancellationToken ct = default);
 
+    void Remove(ManualReading reading);
+
     Task SaveChangesAsync(CancellationToken ct = default);
 }

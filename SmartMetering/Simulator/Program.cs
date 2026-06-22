@@ -7,11 +7,21 @@ using System.Text.Json;
 
 var functionsBaseUrl = Environment.GetEnvironmentVariable("FUNCTIONS_BASE_URL") ?? "http://localhost:7071";
 var intervalSeconds = int.TryParse(Environment.GetEnvironmentVariable("INTERVAL_SECONDS"), out var s) ? s : 5;
+var demoAnomaly = (Environment.GetEnvironmentVariable("DEMO_ANOMALY") ?? "none").Trim().ToLowerInvariant();
+var demoHistory = bool.TryParse(Environment.GetEnvironmentVariable("DEMO_HISTORY"), out var seedHistory) && seedHistory;
 
 var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 using var http = new HttpClient { BaseAddress = new Uri(functionsBaseUrl) };
 
 Console.WriteLine("=== Smart Meter Simulator ===");
+if (demoAnomaly is "voltage" or "load" or "both")
+{
+    Console.WriteLine($"Demo anomaly enabled: {demoAnomaly} (forced on the second measurement).");
+}
+if (demoHistory)
+{
+    Console.WriteLine("Demo tariff history enabled: the first samples cover NT, VT and NT.");
+}
 Console.Write("Serial number (e.g. SM-2026-00001): ");
 var serial = (Console.ReadLine() ?? string.Empty).Trim().ToUpperInvariant();
 
@@ -64,23 +74,41 @@ http.DefaultRequestHeaders.Add("X-Device-Token", deviceToken);
 var random = new Random();
 var totalEnergyKwh = Math.Round(random.NextDouble() * 500, 2); // starting cumulative reading
 var maxLoadKw = isThreePhase ? 11.04 : 6.9;
+var sampleIndex = 0;
 
 Console.WriteLine($"Sending telemetry every {intervalSeconds}s. Press Ctrl+C to stop.");
 while (true)
 {
-    var loadKw = Math.Round(random.NextDouble() * maxLoadKw, 3);
+    var forceLoadSpike = sampleIndex == 1 && (demoAnomaly is "load" or "both");
+    var forceVoltageDrop = sampleIndex == 1 && (demoAnomaly is "voltage" or "both");
+    var loadKw = forceLoadSpike
+        ? Math.Round(maxLoadKw * 1.25, 3)
+        : Math.Round(random.NextDouble() * maxLoadKw, 3);
     totalEnergyKwh = Math.Round(totalEnergyKwh + loadKw * intervalSeconds / 3600.0, 3);
 
-    // Occasionally simulate a voltage drop (anomaly) below 190V.
-    double Voltage() => random.NextDouble() < 0.1 ? Math.Round(180 + random.NextDouble() * 8, 1) : Math.Round(225 + random.NextDouble() * 10, 1);
+    double Voltage() => forceVoltageDrop
+        ? 185.0
+        : random.NextDouble() < 0.1
+            ? Math.Round(180 + random.NextDouble() * 8, 1)
+            : Math.Round(225 + random.NextDouble() * 10, 1);
     double Current() => Math.Round(random.NextDouble() * 16, 2);
     double PowerFactor() => Math.Round(0.9 + random.NextDouble() * 0.09, 2);
+
+    var observationTime = demoHistory
+        ? sampleIndex switch
+        {
+            0 => DateTime.UtcNow.Date.AddDays(-1).AddHours(4),
+            1 => DateTime.UtcNow.Date.AddDays(-1).AddHours(10),
+            2 => DateTime.UtcNow.Date.AddDays(-1).AddHours(22),
+            _ => DateTime.UtcNow,
+        }
+        : DateTime.UtcNow;
 
     var measurement = new
     {
         totalEnergyKwh,
         currentLoadKw = loadKw,
-        observationTime = DateTime.UtcNow,
+        observationTime,
         voltageL1 = Voltage(),
         voltageL2 = isThreePhase ? Voltage() : (double?)null,
         voltageL3 = isThreePhase ? Voltage() : (double?)null,
@@ -102,6 +130,7 @@ while (true)
         Console.WriteLine($"Send failed: {ex.Message}");
     }
 
+    sampleIndex++;
     await Task.Delay(TimeSpan.FromSeconds(intervalSeconds));
 }
 

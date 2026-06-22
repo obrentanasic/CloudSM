@@ -2,7 +2,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Legend,
   Line,
   LineChart,
@@ -15,7 +14,7 @@ import type { TelemetryPoint } from '../types';
 
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('sr-RS', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-/** Voltage + load trend over the recent window (oldest → newest). */
+/** Voltage + load trend over the recent window (oldest -> newest). */
 export function VoltageLoadChart({ points }: { points: TelemetryPoint[] }) {
   const data = [...points]
     .sort((a, b) => +new Date(a.observationTime) - +new Date(b.observationTime))
@@ -44,36 +43,56 @@ export function VoltageLoadChart({ points }: { points: TelemetryPoint[] }) {
   );
 }
 
-/** Energy consumed per tariff over the recent window, derived from cumulative-reading deltas. */
-export function TariffBarChart({ points }: { points: TelemetryPoint[] }) {
+export interface DailyTariffPoint {
+  day: string;
+  vt: number;
+  nt: number;
+}
+
+export function buildDailyTariffData(points: TelemetryPoint[]): DailyTariffPoint[] {
   const sorted = [...points].sort((a, b) => +new Date(a.observationTime) - +new Date(b.observationTime));
-  let vt = 0;
-  let nt = 0;
+  const totals = new Map<string, DailyTariffPoint>();
+
   for (let i = 1; i < sorted.length; i++) {
     const delta = sorted[i].totalEnergyKwh - sorted[i - 1].totalEnergyKwh;
     if (delta <= 0) continue;
-    if (sorted[i].tariff === 0) vt += delta;
-    else nt += delta;
+
+    const date = new Date(sorted[i].observationTime);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const item = totals.get(key) ?? {
+      day: date.toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit' }),
+      vt: 0,
+      nt: 0,
+    };
+
+    if (sorted[i].tariff === 0) item.vt += delta;
+    else item.nt += delta;
+    totals.set(key, item);
   }
 
-  const data = [
-    { name: 'ВТ', kWh: Number(vt.toFixed(3)) },
-    { name: 'НТ', kWh: Number(nt.toFixed(3)) },
-  ];
+  return [...totals.values()].map((item) => ({
+    ...item,
+    vt: Number(item.vt.toFixed(3)),
+    nt: Number(item.nt.toFixed(3)),
+  }));
+}
+
+/** Daily energy consumption split into high and low tariff columns. */
+export function TariffBarChart({ points }: { points: TelemetryPoint[] }) {
+  const data = buildDailyTariffData(points);
 
   return (
     <div className="chart">
-      <h3>Потрошња по тарифи (kWh)</h3>
+      <h3>Дневна потрошња по тарифи (kWh)</h3>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="name" />
+          <XAxis dataKey="day" />
           <YAxis width={40} />
           <Tooltip />
-          <Bar dataKey="kWh" name="kWh">
-            <Cell fill="#2563eb" />
-            <Cell fill="#f59e0b" />
-          </Bar>
+          <Legend />
+          <Bar dataKey="vt" name="ВТ" fill="#2563eb" />
+          <Bar dataKey="nt" name="НТ" fill="#f59e0b" />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -15,6 +15,8 @@ public interface IAuthService
     // ── Admin user management ────────────────────────────────────────────────
     Task<IReadOnlyList<UserDto>> GetUsersAsync(CancellationToken ct = default);
 
+    Task ResendActivationAsync(Guid userId, CancellationToken ct = default);
+
     Task SuspendUserAsync(Guid actingUserId, Guid userId, CancellationToken ct = default);
 
     Task ReactivateUserAsync(Guid userId, CancellationToken ct = default);

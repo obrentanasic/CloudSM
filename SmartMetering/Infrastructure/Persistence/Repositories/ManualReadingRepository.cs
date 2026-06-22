@@ -33,5 +33,7 @@ public sealed class ManualReadingRepository : IManualReadingRepository
     public async Task AddAsync(ManualReading reading, CancellationToken ct = default) =>
         await _db.ManualReadings.AddAsync(reading, ct);
 
+    public void Remove(ManualReading reading) => _db.ManualReadings.Remove(reading);
+
     public Task SaveChangesAsync(CancellationToken ct = default) => _db.SaveChangesAsync(ct);
 }
